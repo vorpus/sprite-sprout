@@ -6,20 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Added
+## [0.2.0] - 2026-02-15
 
 - Three new color reduction algorithms: Median Cut, Weighted Octree, Octree + CIELAB Refine
-- Method selector dropdown in Cleanup panel for choosing quantization algorithm
-- Quantize dispatcher module for unified algorithm access
-
-### Changed
-
-- Cleanup controls now auto-apply: adjusting grid size or color sliders immediately commits changes (Ctrl+Z to undo) instead of requiring Apply/Cancel buttons
-- Color reduction always quantizes from a clean pre-reduction snapshot, preventing quality degradation from re-quantizing
+- Method selector in Cleanup panel for choosing quantization algorithm
+- Cleanup controls auto-apply — no more Apply/Cancel buttons, Ctrl+Z to undo
 
 ## [0.1.0] - 2026-02-15
-
-### Added
 
 - Import images via drag-and-drop, file picker, or clipboard paste
 - Auto grid detection and snap-to-grid
@@ -30,5 +23,3 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Palette panel with color editing
 - PNG export and clipboard copy
 - Undo/redo with full snapshot history
-- Onboarding modal with welcome guide and changelog
-- "Try a demo image" button in empty state
