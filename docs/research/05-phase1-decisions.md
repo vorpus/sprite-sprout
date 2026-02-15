@@ -102,6 +102,13 @@
 - **Scale options**: 1x, 2x, 4x, 8x, 16x with dimension preview ("64x64 → 512x512")
 - **Clipboard API**: `navigator.clipboard.write([new ClipboardItem({'image/png': blob})])` — requires secure context (HTTPS or localhost)
 
+## Post-Phase-1: Drawing Tool History & Confirmation Dialogs
+
+- **Drawing tools push history on pointerdown** — `pushHistory('Pencil stroke')` before the first pixel change, so the entire stroke (down → move → up) is one undo entry. Flood fill also snapshots before applying.
+- **hasManualEdits flag** on `EditorStore` — set `true` when pencil/eraser/fill actually changes a pixel; cleared after auto-clean, grid snap, or image import.
+- **Confirmation dialog before destructive re-build** — Auto-Clean and grid snap both read from `sourceImage`, completely replacing the canvas. When `hasManualEdits` is true, a `ConfirmDialog` warns the user before proceeding. The operation still pushes history, so undo is available even after confirming.
+- **Color reduction not gated** — unlike grid snap and auto-clean, color reduction quantizes the current canvas (not source), so it doesn't fully destroy manual edits. No confirmation needed; undo handles it.
+
 ---
 
 ## Cross-Cutting Decisions

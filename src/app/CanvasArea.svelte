@@ -109,17 +109,26 @@
     switch (tool) {
       case 'pencil': {
         const change = pencilStroke(data, width, height, px, py, editorState.activeColor);
-        if (change) editorState.bumpVersion();
+        if (change) {
+          editorState.hasManualEdits = true;
+          editorState.bumpVersion();
+        }
         break;
       }
       case 'eraser': {
         const change = eraserStroke(data, width, height, px, py);
-        if (change) editorState.bumpVersion();
+        if (change) {
+          editorState.hasManualEdits = true;
+          editorState.bumpVersion();
+        }
         break;
       }
       case 'fill': {
         const changes = floodFill(data, width, height, px, py, editorState.activeColor);
-        if (changes.length > 0) editorState.bumpVersion();
+        if (changes.length > 0) {
+          editorState.hasManualEdits = true;
+          editorState.bumpVersion();
+        }
         break;
       }
       case 'picker': {
@@ -161,7 +170,10 @@
       }
     }
 
-    if (changed) editorState.bumpVersion();
+    if (changed) {
+      editorState.hasManualEdits = true;
+      editorState.bumpVersion();
+    }
   }
 
   // ---- Rendering ------------------------------------------------------------
@@ -429,12 +441,17 @@
       const tool = editorState.activeTool;
 
       if (tool === 'pencil' || tool === 'eraser') {
+        // Snapshot state BEFORE the stroke begins — entire stroke is one undo entry
+        const label = tool === 'pencil' ? 'Pencil stroke' : 'Eraser stroke';
+        editorState.pushHistory(label);
         isDrawing = true;
         lastPixel = pix;
         applyToolAt(pix.x, pix.y);
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      } else if (tool === 'fill' || tool === 'picker') {
-        // Single-click tools — apply once, no drag
+      } else if (tool === 'fill') {
+        editorState.pushHistory('Flood fill');
+        applyToolAt(pix.x, pix.y);
+      } else if (tool === 'picker') {
         applyToolAt(pix.x, pix.y);
       }
     }

@@ -10,6 +10,7 @@
     QUANTIZE_METHODS,
     type QuantizeMethod,
   } from '../lib/engine/color/quantize-dispatch';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   // ---------------------------------------------------------------------------
   // Local state
@@ -26,9 +27,19 @@
   let bannerDismissed: boolean = $state(false);
   let cleanupApplied: boolean = $state(false);
 
+  // Tracks the last grid size that was actually applied to the canvas,
+  // so we can restore the slider on cancel.
+  let lastAppliedGrid: number = 1;
+
   // Snapshot of canvas before color reduction — quantize from this to avoid
   // re-quantizing already-quantized data when the user adjusts color settings.
   let preColorSnapshot: CanvasState | null = $state(null);
+
+  // Confirmation dialog state — shown before destructive operations when
+  // the user has manual pixel edits that would be lost.
+  let confirmAction: (() => void) | null = $state(null);
+  let confirmCancel: (() => void) | null = $state(null);
+  let confirmMessage: string = $state('');
 
   // Debounce timers (plain variables — NOT $state, so they don't become
   // spurious dependencies of the sourceImage-reset $effect below)
@@ -76,6 +87,7 @@
     colorsReduced = false;
     bannerDismissed = false;
     cleanupApplied = false;
+    lastAppliedGrid = 1;
     preColorSnapshot = null;
     clearTimeout(gridDebounceTimer);
     clearTimeout(colorDebounceTimer);
@@ -121,6 +133,19 @@
   }
 
   function autoApplyGrid(): void {
+    if (editorState.hasManualEdits) {
+      const prevGrid = lastAppliedGrid;
+      confirmMessage =
+        'Changing the grid size rebuilds the canvas from the original image. ' +
+        'Your manual pixel edits will be lost (you can still undo).';
+      confirmAction = () => doApplyGrid();
+      confirmCancel = () => { gridSizeInput = prevGrid; };
+      return;
+    }
+    doApplyGrid();
+  }
+
+  function doApplyGrid(): void {
     const source = editorState.sourceImage;
     if (!source) return;
 
@@ -159,6 +184,8 @@
     editorState.bumpVersion();
     fitAndCenter(result.width, result.height);
     cleanupApplied = true;
+    lastAppliedGrid = gridSizeInput;
+    editorState.hasManualEdits = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -208,6 +235,17 @@
   // ---------------------------------------------------------------------------
 
   function handleAutoClean(): void {
+    if (editorState.hasManualEdits) {
+      confirmMessage =
+        'Auto-Clean rebuilds the canvas from the original image. ' +
+        'Your manual pixel edits will be lost (you can still undo).';
+      confirmAction = () => doAutoClean();
+      return;
+    }
+    doAutoClean();
+  }
+
+  function doAutoClean(): void {
     const source = editorState.sourceImage;
     if (!source) return;
 
@@ -250,6 +288,8 @@
     colorsReduced = result.reduced !== null;
     cleanupApplied = true;
     bannerDismissed = true;
+    lastAppliedGrid = gridSizeInput;
+    editorState.hasManualEdits = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -293,6 +333,26 @@
     }
   }
 </script>
+
+<ConfirmDialog
+  show={confirmAction !== null}
+  title="Manual edits will be lost"
+  message={confirmMessage}
+  confirmLabel="Continue"
+  cancelLabel="Cancel"
+  onconfirm={() => {
+    const action = confirmAction;
+    confirmAction = null;
+    confirmCancel = null;
+    action?.();
+  }}
+  oncancel={() => {
+    const restore = confirmCancel;
+    confirmAction = null;
+    confirmCancel = null;
+    restore?.();
+  }}
+/>
 
 <div class="panel-inner">
   <h3>Cleanup</h3>

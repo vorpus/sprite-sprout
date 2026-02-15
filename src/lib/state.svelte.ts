@@ -111,6 +111,10 @@ class EditorStore {
   beforeAfterMode: BeforeAfterMode = $state('split');
   splitPosition: number = $state(0.5); // 0..1, fraction of canvas width
 
+  // Manual edits tracking — true after drawing tools modify pixels,
+  // cleared when auto-clean or grid snap replaces the canvas from source.
+  hasManualEdits: boolean = $state(false);
+
   // Viewport dimensions (written by CanvasArea's ResizeObserver)
   viewportW: number = $state(0);
   viewportH: number = $state(0);
@@ -185,6 +189,7 @@ class EditorStore {
     this.showGrid = true;
     this.showBeforeAfter = false;
     this.splitPosition = 0.5;
+    this.hasManualEdits = false;
     this.history = new HistoryManager();
   }
 }

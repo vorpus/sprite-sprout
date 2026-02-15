@@ -14,11 +14,6 @@
 
 ## Active
 
-### [low] No pushHistory calls in drawing tools
-- **Where**: `src/app/CanvasArea.svelte` (applyToolAt, applyStrokeAlongLine)
-- **Details**: Pencil/eraser strokes and flood fills call `bumpVersion()` but never `pushHistory()`. Each stroke should snapshot before the first pixel change on mousedown, so the full stroke is one undo entry. Currently, individual pixel changes are not undoable.
-- **Added**: 2026-02-15
-
 ### [low] No error handling on image import
 - **Where**: `src/app/ImportDropZone.svelte`, `src/lib/engine/io/import.ts`
 - **Details**: Very large images (2048+), non-image files, and corrupt files can cause unhandled errors. The design spec calls for toast messages and size warnings but these aren't implemented yet.
@@ -30,6 +25,12 @@
 - **Added**: 2026-02-15
 
 ## Resolved
+
+### [low] No pushHistory calls in drawing tools
+- **Where**: `src/app/CanvasArea.svelte` (applyToolAt, applyStrokeAlongLine)
+- **Details**: Pencil/eraser strokes and flood fills called `bumpVersion()` but never `pushHistory()`. Fixed: history is pushed on pointerdown before first pixel change; entire stroke is one undo entry.
+- **Added**: 2026-02-15
+- **Resolved**: 2026-02-15
 
 ### [low] Cleanup preview conflicts between grid and color
 - **Where**: `src/app/CleanupPanel.svelte`

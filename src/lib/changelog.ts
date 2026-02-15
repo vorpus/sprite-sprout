@@ -18,6 +18,8 @@ export const changelog: ChangelogEntry[] = [
       'Color slider sentinel (65 = Original) locks to 1–64 after first reduction',
       'Before/after defaults to split view',
       'Fix: cleanup controls (grid size, colors) no longer re-trigger the auto-clean banner',
+      'Fix: drawing tools (pencil, eraser, flood fill) now support undo/redo',
+      'Confirmation dialog when auto-clean or grid snap would overwrite manual edits',
       'Release script: npm run release minor|major',
     ],
   },
