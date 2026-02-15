@@ -16,6 +16,7 @@
   let gridSizeInput: number = $state(4);
   let colorCountInput: number = $state(16);
   let colorMethod: QuantizeMethod = $state('median-cut');
+  let colorsReduced: boolean = $state(false);
   let bannerDismissed: boolean = $state(false);
   let cleanupApplied: boolean = $state(false);
 
@@ -115,7 +116,22 @@
       height: result.height,
       data: result.data,
     };
-    editorState.palette = extractTopColors(result.data, 64);
+
+    // Re-apply color reduction if it was previously active
+    if (colorsReduced) {
+      const quantized = quantize(
+        result.data,
+        result.width,
+        result.height,
+        colorCountInput,
+        colorMethod,
+      );
+      editorState.canvas.data.set(quantized.remappedData);
+      editorState.palette = quantized.palette;
+    } else {
+      editorState.palette = extractTopColors(result.data, 64);
+    }
+
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
@@ -177,6 +193,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
+    colorsReduced = true;
     cleanupApplied = true;
   }
 
@@ -218,6 +235,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
+    colorsReduced = result.reduced !== null;
     cleanupApplied = true;
     bannerDismissed = true;
   }
