@@ -2,7 +2,7 @@ import type { Color } from '../../types';
 import { detectGridSize } from '../grid/detect';
 import { snapToGrid } from '../grid/snap';
 import { extractColors } from '../color/palette';
-import { octreeQuantize } from '../color/quantize';
+import { quantize } from '../color/quantize-dispatch';
 
 export interface CleanupResult {
   snapped: { data: Uint8ClampedArray; width: number; height: number };
@@ -53,11 +53,12 @@ export function autoClean(
 
   if (originalColorCount > 32) {
     const targetColors = suggestColorCount(originalColorCount);
-    const quantized = octreeQuantize(
+    const quantized = quantize(
       snapped.data,
       snapped.width,
       snapped.height,
       targetColors,
+      'octree-refine',
     );
     reduced = {
       data: quantized.remappedData,

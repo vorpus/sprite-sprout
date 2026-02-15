@@ -191,6 +191,13 @@
     const sourceData = new Uint8ClampedArray(source.data);
     const result = autoClean(sourceData, source.width, source.height);
 
+    // Sync UI controls to reflect what auto-clean chose
+    gridSizeInput = result.gridSize;
+    colorMethod = 'octree-refine';
+    if (result.reduced) {
+      colorCountInput = result.reducedColorCount;
+    }
+
     editorState.pushHistory('Auto-Clean');
 
     // Apply grid snap result
