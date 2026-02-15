@@ -2,6 +2,7 @@
   import Toolbar from './Toolbar.svelte';
   import CanvasArea from './CanvasArea.svelte';
   import CleanupPanel from './CleanupPanel.svelte';
+  import PalettePanel from './PalettePanel.svelte';
   import ExportPanel from './ExportPanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import { editorState } from '../lib/state.svelte';
@@ -56,6 +57,8 @@
   </div>
   <div class="panel-right">
     <CleanupPanel />
+    <div class="panel-divider"></div>
+    <PalettePanel />
     <div class="panel-divider"></div>
     <ExportPanel bind:this={exportPanel} />
   </div>
