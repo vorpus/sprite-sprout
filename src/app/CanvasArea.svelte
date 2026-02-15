@@ -552,6 +552,20 @@
 
   // ---- Effects --------------------------------------------------------------
 
+  // Re-fit viewport when canvas dimensions change (grid snap, auto-clean, etc.)
+  let prevCanvasW = 0;
+  let prevCanvasH = 0;
+  $effect(() => {
+    const w = editorState.canvas?.width ?? 0;
+    const h = editorState.canvas?.height ?? 0;
+    if (w > 0 && h > 0 && (w !== prevCanvasW || h !== prevCanvasH)) {
+      prevCanvasW = w;
+      prevCanvasH = h;
+      // Defer to next tick so viewportW/H are current
+      queueMicrotask(() => fitToView());
+    }
+  });
+
   // Re-render whenever canvas version, zoom, pan, or viewport changes
   $effect(() => {
     // Touch reactive dependencies to subscribe
