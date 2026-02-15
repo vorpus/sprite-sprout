@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 'unreleased',
+    date: '',
+    items: [
+      'Three new color reduction algorithms: Median Cut, Weighted Octree, Octree + CIELAB Refine',
+      'Method selector in Cleanup panel for choosing quantization algorithm',
+    ],
+  },
+  {
     version: '0.1.0',
     date: '2026-02-15',
     items: [

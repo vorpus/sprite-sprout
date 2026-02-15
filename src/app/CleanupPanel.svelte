@@ -3,7 +3,11 @@
   import { autoClean, suggestColorCount } from '../lib/engine/cleanup/pipeline';
   import { snapToGrid } from '../lib/engine/grid/snap';
   import { extractTopColors } from '../lib/engine/color/palette';
-  import { octreeQuantize } from '../lib/engine/color/quantize';
+  import {
+    quantize,
+    QUANTIZE_METHODS,
+    type QuantizeMethod,
+  } from '../lib/engine/color/quantize-dispatch';
 
   // ---------------------------------------------------------------------------
   // Local state
@@ -11,6 +15,7 @@
 
   let gridSizeInput: number = $state(4);
   let colorCountInput: number = $state(16);
+  let colorMethod: QuantizeMethod = $state('median-cut');
   let bannerDismissed: boolean = $state(false);
   let cleanupApplied: boolean = $state(false);
 
@@ -132,11 +137,12 @@
     const canvas = editorState.canvas;
     if (!canvas) return;
 
-    const quantized = octreeQuantize(
+    const quantized = quantize(
       canvas.data,
       canvas.width,
       canvas.height,
       colorCountInput,
+      colorMethod,
     );
 
     editorState.cleanupPreview = {
@@ -157,11 +163,12 @@
     const canvas = editorState.canvas;
     if (!canvas) return;
 
-    const quantized = octreeQuantize(
+    const quantized = quantize(
       canvas.data,
       canvas.width,
       canvas.height,
       colorCountInput,
+      colorMethod,
     );
 
     editorState.pushHistory('Reduce colors');
@@ -233,6 +240,11 @@
       colorCountInput = val;
       scheduleColorPreview();
     }
+  }
+
+  function handleMethodChange(e: Event): void {
+    colorMethod = (e.target as HTMLSelectElement).value as QuantizeMethod;
+    scheduleColorPreview();
   }
 </script>
 
@@ -322,6 +334,12 @@
       <span class="section-label">
         Colors: {analysisColorCount}
       </span>
+
+      <select class="method-select" value={colorMethod} onchange={handleMethodChange}>
+        {#each QUANTIZE_METHODS as m}
+          <option value={m.value}>{m.label}</option>
+        {/each}
+      </select>
 
       <div class="input-row">
         <input
@@ -526,5 +544,21 @@
     height: 1px;
     background: var(--border-color);
     margin: 12px 0;
+  }
+
+  .method-select {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  .method-select:focus {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
   }
 </style>

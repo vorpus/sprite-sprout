@@ -65,7 +65,7 @@ src/
   app/              # Svelte 5 UI components
   engine/           # Pure TS, no framework deps
     canvas/         # Renderer, zoom, grid overlay, tools
-    color/          # Quantization, palette, distance, dither
+    color/          # Quantization (octree, median-cut, k-means refine), palette, distance
     grid/           # Grid detection + snap
     analysis/       # AA detection, noise, outlines
     cleanup/        # Pipeline chaining detect → snap → reduce → clean

@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { rgbToLab, deltaE, rgbDeltaE } from './distance';
 import { extractColors, extractTopColors } from './palette';
-import { octreeQuantize } from './quantize';
+import { octreeQuantize, octreeQuantizeWeighted } from './quantize';
+import { medianCutQuantize } from './median-cut';
+import { refineWithKMeans } from './refine';
+import { quantize, type QuantizeMethod } from './quantize-dispatch';
 import { remapToPalette, mergePaletteColors } from './remap';
 import type { Color } from '../../types';
 
@@ -310,4 +313,357 @@ describe('mergePaletteColors', () => {
     expect(() => mergePaletteColors(palette, 0, 5)).toThrow(RangeError);
     expect(() => mergePaletteColors(palette, -1, 0)).toThrow(RangeError);
   });
+});
+
+// ---------------------------------------------------------------------------
+// quantize.ts — octreeQuantizeWeighted
+// ---------------------------------------------------------------------------
+
+describe('octreeQuantizeWeighted', () => {
+  it('reduces a 4x4 image with 8 colors down to 2', () => {
+    const colors: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 255, 0, 255],
+      [255, 0, 255, 255],
+      [0, 255, 255, 255],
+      [128, 0, 0, 255],
+      [0, 128, 0, 255],
+    ];
+    const pixels: Color[] = [];
+    for (const c of colors) {
+      pixels.push(c, c); // 16 pixels = 4x4
+    }
+    const data = makeImageData(pixels);
+
+    const result = octreeQuantizeWeighted(data, 4, 4, 2);
+
+    expect(result.palette.length).toBe(2);
+    expect(result.indexedData.length).toBe(16);
+    expect(result.remappedData.length).toBe(64); // 16 * 4
+
+    // Every pixel in remappedData should match one of the two palette colors
+    for (let p = 0; p < 16; p++) {
+      const i = p * 4;
+      const r = result.remappedData[i];
+      const g = result.remappedData[i + 1];
+      const b = result.remappedData[i + 2];
+      const a = result.remappedData[i + 3];
+
+      const matchesPalette = result.palette.some(
+        (c) => c[0] === r && c[1] === g && c[2] === b && c[3] === a,
+      );
+      expect(matchesPalette).toBe(true);
+    }
+  });
+
+  it('preserves transparent pixels', () => {
+    const pixels: Color[] = [
+      [0, 0, 0, 0], // transparent
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+    const data = makeImageData(pixels);
+
+    const result = octreeQuantizeWeighted(data, 2, 2, 2);
+
+    // First pixel should remain transparent
+    expect(result.remappedData[0]).toBe(0);
+    expect(result.remappedData[1]).toBe(0);
+    expect(result.remappedData[2]).toBe(0);
+    expect(result.remappedData[3]).toBe(0);
+  });
+
+  it('handles a single-color image', () => {
+    const pixels: Color[] = Array(4).fill([42, 100, 200, 255]);
+    const data = makeImageData(pixels);
+
+    const result = octreeQuantizeWeighted(data, 2, 2, 4);
+
+    expect(result.palette.length).toBe(1);
+    expect(result.palette[0]).toEqual([42, 100, 200, 255]);
+  });
+
+  it('produces a valid palette of correct size', () => {
+    const colors: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 255, 0, 255],
+      [255, 0, 255, 255],
+      [0, 255, 255, 255],
+      [128, 0, 0, 255],
+      [0, 128, 0, 255],
+    ];
+    const pixels: Color[] = [];
+    for (const c of colors) {
+      pixels.push(c, c);
+    }
+    const data = makeImageData(pixels);
+
+    const result = octreeQuantizeWeighted(data, 4, 4, 4);
+
+    expect(result.palette.length).toBeLessThanOrEqual(4);
+    expect(result.palette.length).toBeGreaterThan(0);
+
+    // Every palette entry should be a valid RGBA tuple with alpha 255
+    for (const color of result.palette) {
+      expect(color).toHaveLength(4);
+      expect(color[3]).toBe(255);
+      for (let ch = 0; ch < 3; ch++) {
+        expect(color[ch]).toBeGreaterThanOrEqual(0);
+        expect(color[ch]).toBeLessThanOrEqual(255);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// median-cut.ts
+// ---------------------------------------------------------------------------
+
+describe('medianCutQuantize', () => {
+  it('reduces a multi-color image to target count', () => {
+    const colors: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 255, 0, 255],
+      [255, 0, 255, 255],
+      [0, 255, 255, 255],
+      [128, 0, 0, 255],
+      [0, 128, 0, 255],
+    ];
+    const pixels: Color[] = [];
+    for (const c of colors) {
+      pixels.push(c, c); // 16 pixels = 4x4
+    }
+    const data = makeImageData(pixels);
+
+    const result = medianCutQuantize(data, 4, 4, 4);
+
+    expect(result.palette.length).toBeLessThanOrEqual(4);
+    expect(result.palette.length).toBeGreaterThan(0);
+    expect(result.indexedData.length).toBe(16);
+    expect(result.remappedData.length).toBe(64);
+
+    // Every pixel in remappedData should match one of the palette colors
+    for (let p = 0; p < 16; p++) {
+      const i = p * 4;
+      const r = result.remappedData[i];
+      const g = result.remappedData[i + 1];
+      const b = result.remappedData[i + 2];
+      const a = result.remappedData[i + 3];
+
+      const matchesPalette = result.palette.some(
+        (c) => c[0] === r && c[1] === g && c[2] === b && c[3] === a,
+      );
+      expect(matchesPalette).toBe(true);
+    }
+  });
+
+  it('preserves transparent pixels', () => {
+    const pixels: Color[] = [
+      [0, 0, 0, 0], // transparent
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+    const data = makeImageData(pixels);
+
+    const result = medianCutQuantize(data, 2, 2, 2);
+
+    // First pixel should remain transparent
+    expect(result.remappedData[0]).toBe(0);
+    expect(result.remappedData[1]).toBe(0);
+    expect(result.remappedData[2]).toBe(0);
+    expect(result.remappedData[3]).toBe(0);
+  });
+
+  it('handles a single-color image', () => {
+    const pixels: Color[] = Array(4).fill([42, 100, 200, 255]);
+    const data = makeImageData(pixels);
+
+    const result = medianCutQuantize(data, 2, 2, 4);
+
+    expect(result.palette.length).toBe(1);
+    expect(result.palette[0]).toEqual([42, 100, 200, 255]);
+  });
+
+  it('produces palette of exact expected size (min of target and unique colors)', () => {
+    // 3 unique colors, target of 8 — should produce exactly 3
+    const pixels: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 0, 0, 255],
+    ];
+    const data = makeImageData(pixels);
+
+    const result = medianCutQuantize(data, 2, 2, 8);
+
+    expect(result.palette.length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refine.ts
+// ---------------------------------------------------------------------------
+
+describe('refineWithKMeans', () => {
+  it('takes an initial palette and refines it — palette length should not change', () => {
+    const colors: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 255, 0, 255],
+      [255, 0, 255, 255],
+      [0, 255, 255, 255],
+      [128, 0, 0, 255],
+      [0, 128, 0, 255],
+    ];
+    const pixels: Color[] = [];
+    for (const c of colors) {
+      pixels.push(c, c);
+    }
+    const data = makeImageData(pixels);
+
+    // Get an initial palette from octree
+    const initial = octreeQuantize(data, 4, 4, 4);
+    const result = refineWithKMeans(data, 4, 4, initial.palette);
+
+    expect(result.palette.length).toBe(initial.palette.length);
+    expect(result.indexedData.length).toBe(16);
+    expect(result.remappedData.length).toBe(64);
+  });
+
+  it('preserves transparent pixels', () => {
+    const pixels: Color[] = [
+      [0, 0, 0, 0], // transparent
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+    const data = makeImageData(pixels);
+    const initialPalette: Color[] = [
+      [255, 0, 0, 255],
+      [0, 128, 128, 255],
+    ];
+
+    const result = refineWithKMeans(data, 2, 2, initialPalette);
+
+    // First pixel should remain transparent
+    expect(result.remappedData[0]).toBe(0);
+    expect(result.remappedData[1]).toBe(0);
+    expect(result.remappedData[2]).toBe(0);
+    expect(result.remappedData[3]).toBe(0);
+  });
+
+  it('with an already-perfect palette, refinement should not change much', () => {
+    const pixels: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 0, 0, 255],
+    ];
+    const data = makeImageData(pixels);
+    const perfectPalette: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+
+    const result = refineWithKMeans(data, 2, 2, perfectPalette);
+
+    // Palette should remain very close to the original
+    expect(result.palette.length).toBe(3);
+    for (let c = 0; c < 3; c++) {
+      for (let ch = 0; ch < 3; ch++) {
+        expect(Math.abs(result.palette[c][ch] - perfectPalette[c][ch])).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('handles empty palette gracefully', () => {
+    const pixels: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [128, 128, 128, 255],
+    ];
+    const data = makeImageData(pixels);
+
+    const result = refineWithKMeans(data, 2, 2, []);
+
+    expect(result.palette.length).toBe(0);
+    expect(result.indexedData.length).toBe(4);
+    expect(result.remappedData.length).toBe(16);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// quantize-dispatch.ts
+// ---------------------------------------------------------------------------
+
+describe('quantize dispatcher', () => {
+  const colors: Color[] = [
+    [255, 0, 0, 255],
+    [0, 255, 0, 255],
+    [0, 0, 255, 255],
+    [255, 255, 0, 255],
+    [255, 0, 255, 255],
+    [0, 255, 255, 255],
+    [128, 0, 0, 255],
+    [0, 128, 0, 255],
+  ];
+  const pixels: Color[] = [];
+  for (const c of colors) {
+    pixels.push(c, c); // 16 pixels = 4x4
+  }
+  const data = makeImageData(pixels);
+  const targetColors = 4;
+
+  const methods: QuantizeMethod[] = [
+    'octree',
+    'weighted-octree',
+    'median-cut',
+    'octree-refine',
+  ];
+
+  for (const method of methods) {
+    it(`dispatches '${method}' correctly and returns valid results`, () => {
+      const result = quantize(data, 4, 4, targetColors, method);
+
+      expect(result.palette.length).toBeGreaterThan(0);
+      expect(result.palette.length).toBeLessThanOrEqual(targetColors);
+      expect(result.remappedData.length).toBe(64); // 16 pixels * 4 channels
+      expect(result.indexedData.length).toBe(16);
+
+      // Every palette entry should be a valid RGBA color
+      for (const color of result.palette) {
+        expect(color).toHaveLength(4);
+        expect(color[3]).toBe(255);
+        for (let ch = 0; ch < 3; ch++) {
+          expect(color[ch]).toBeGreaterThanOrEqual(0);
+          expect(color[ch]).toBeLessThanOrEqual(255);
+        }
+      }
+
+      // Every opaque pixel in remappedData should match a palette color
+      for (let p = 0; p < 16; p++) {
+        const i = p * 4;
+        const r = result.remappedData[i];
+        const g = result.remappedData[i + 1];
+        const b = result.remappedData[i + 2];
+        const a = result.remappedData[i + 3];
+
+        const matchesPalette = result.palette.some(
+          (c) => c[0] === r && c[1] === g && c[2] === b && c[3] === a,
+        );
+        expect(matchesPalette).toBe(true);
+      }
+    });
+  }
 });

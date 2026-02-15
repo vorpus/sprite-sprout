@@ -4,6 +4,14 @@ All notable changes to Sprite Sprout will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- Three new color reduction algorithms: Median Cut, Weighted Octree, Octree + CIELAB Refine
+- Method selector dropdown in Cleanup panel for choosing quantization algorithm
+- Quantize dispatcher module for unified algorithm access
+
 ## [0.1.0] - 2026-02-15
 
 ### Added
