@@ -4,6 +4,7 @@
   import { snapToGrid } from '../lib/engine/grid/snap';
   import { extractTopColors } from '../lib/engine/color/palette';
   import { calculateFitZoom } from '../lib/engine/canvas/renderer';
+  import type { CanvasState } from '../lib/types';
   import {
     quantize,
     QUANTIZE_METHODS,
@@ -14,12 +15,20 @@
   // Local state
   // ---------------------------------------------------------------------------
 
-  let gridSizeInput: number = $state(4);
-  let colorCountInput: number = $state(16);
+  // 65 = "Original" sentinel — slider range is 2..65, where 65 means no
+  // reduction applied. Once the user drags to <=64, the max locks to 64.
+  const COLOR_ORIGINAL = 65;
+
+  let gridSizeInput: number = $state(1);
+  let colorCountInput: number = $state(COLOR_ORIGINAL);
   let colorMethod: QuantizeMethod = $state('median-cut');
   let colorsReduced: boolean = $state(false);
   let bannerDismissed: boolean = $state(false);
   let cleanupApplied: boolean = $state(false);
+
+  // Snapshot of canvas before color reduction — quantize from this to avoid
+  // re-quantizing already-quantized data when the user adjusts color settings.
+  let preColorSnapshot: CanvasState | null = $state(null);
 
   // Debounce timers
   let gridDebounceTimer: ReturnType<typeof setTimeout> | undefined = $state(undefined);
@@ -49,22 +58,14 @@
 
   let topCandidates: number[] = $derived(suggestedGridSizes.slice(0, 3));
 
-  // ---------------------------------------------------------------------------
-  // Sync grid size input when detection changes
-  // ---------------------------------------------------------------------------
+  // Once colors have been reduced, lock the slider max to 64
+  let colorSliderMax: number = $derived(colorsReduced ? 64 : COLOR_ORIGINAL);
 
-  $effect(() => {
-    if (editorState.detectedGridSize !== null) {
-      gridSizeInput = editorState.detectedGridSize;
-    }
-  });
-
-  $effect(() => {
-    if (editorState.analysis) {
-      const suggested = suggestColorCount(editorState.analysis.uniqueColorCount);
-      colorCountInput = suggested;
-    }
-  });
+  let suggestedColorCount: number = $derived(
+    editorState.analysis
+      ? suggestColorCount(editorState.analysis.uniqueColorCount)
+      : 16,
+  );
 
   /**
    * Fit and center the canvas in the viewport after a resize.
@@ -95,44 +96,17 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Grid preview (debounced)
+  // Grid auto-apply (debounced)
   // ---------------------------------------------------------------------------
 
-  function scheduleGridPreview(): void {
+  function scheduleGridApply(): void {
     clearTimeout(gridDebounceTimer);
     gridDebounceTimer = setTimeout(() => {
-      runGridPreview();
+      autoApplyGrid();
     }, 200);
   }
 
-  function runGridPreview(): void {
-    const canvas = editorState.canvas;
-    if (!canvas) return;
-
-    const source = editorState.sourceImage;
-    if (!source) return;
-
-    const sourceData = new Uint8ClampedArray(source.data);
-    const result = snapToGrid(sourceData, source.width, source.height, gridSizeInput);
-
-    editorState.cleanupPreview = {
-      data: result.data,
-      width: result.width,
-      height: result.height,
-    };
-    editorState.showingPreview = true;
-  }
-
-  function cancelGridPreview(): void {
-    clearTimeout(gridDebounceTimer);
-    editorState.cleanupPreview = null;
-    editorState.showingPreview = false;
-  }
-
-  function applyGridSnap(): void {
-    const canvas = editorState.canvas;
-    if (!canvas) return;
-
+  function autoApplyGrid(): void {
     const source = editorState.sourceImage;
     if (!source) return;
 
@@ -144,6 +118,13 @@
       width: result.width,
       height: result.height,
       data: result.data,
+    };
+
+    // Update pre-color snapshot so color reduction re-applies from clean base
+    preColorSnapshot = {
+      width: result.width,
+      height: result.height,
+      data: new Uint8ClampedArray(result.data),
     };
 
     // Re-apply color reduction if it was previously active
@@ -161,58 +142,41 @@
       editorState.palette = extractTopColors(result.data, 64);
     }
 
-    editorState.cleanupPreview = null;
-    editorState.showingPreview = false;
     editorState.bumpVersion();
     fitAndCenter(result.width, result.height);
     cleanupApplied = true;
   }
 
   // ---------------------------------------------------------------------------
-  // Color preview (debounced)
+  // Color auto-apply (debounced)
   // ---------------------------------------------------------------------------
 
-  function scheduleColorPreview(): void {
+  function scheduleColorApply(): void {
     clearTimeout(colorDebounceTimer);
     colorDebounceTimer = setTimeout(() => {
-      runColorPreview();
+      autoApplyColors();
     }, 200);
   }
 
-  function runColorPreview(): void {
+  function autoApplyColors(): void {
     const canvas = editorState.canvas;
     if (!canvas) return;
 
+    // Save pre-color snapshot on first color reduction
+    if (!colorsReduced) {
+      preColorSnapshot = {
+        width: canvas.width,
+        height: canvas.height,
+        data: new Uint8ClampedArray(canvas.data),
+      };
+    }
+
+    // Always quantize from the clean base, not already-quantized data
+    const base = preColorSnapshot ?? canvas;
     const quantized = quantize(
-      canvas.data,
-      canvas.width,
-      canvas.height,
-      colorCountInput,
-      colorMethod,
-    );
-
-    editorState.cleanupPreview = {
-      data: quantized.remappedData,
-      width: canvas.width,
-      height: canvas.height,
-    };
-    editorState.showingPreview = true;
-  }
-
-  function cancelColorPreview(): void {
-    clearTimeout(colorDebounceTimer);
-    editorState.cleanupPreview = null;
-    editorState.showingPreview = false;
-  }
-
-  function applyReduceColors(): void {
-    const canvas = editorState.canvas;
-    if (!canvas) return;
-
-    const quantized = quantize(
-      canvas.data,
-      canvas.width,
-      canvas.height,
+      base.data,
+      base.width,
+      base.height,
       colorCountInput,
       colorMethod,
     );
@@ -220,8 +184,6 @@
     editorState.pushHistory('Reduce colors');
     canvas.data.set(quantized.remappedData);
     editorState.palette = quantized.palette;
-    editorState.cleanupPreview = null;
-    editorState.showingPreview = false;
     editorState.bumpVersion();
     colorsReduced = true;
     cleanupApplied = true;
@@ -255,6 +217,13 @@
       data: finalData.data,
     };
 
+    // Store pre-color snapshot (the grid-snapped, pre-quantized state)
+    preColorSnapshot = {
+      width: result.snapped.width,
+      height: result.snapped.height,
+      data: new Uint8ClampedArray(result.snapped.data),
+    };
+
     // Update palette
     if (result.reduced) {
       editorState.palette = result.reduced.palette;
@@ -262,8 +231,6 @@
       editorState.palette = extractTopColors(result.snapped.data, 64);
     }
 
-    editorState.cleanupPreview = null;
-    editorState.showingPreview = false;
     editorState.bumpVersion();
     fitAndCenter(finalData.width, finalData.height);
     colorsReduced = result.reduced !== null;
@@ -272,21 +239,21 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Grid input handlers
+  // Input handlers
   // ---------------------------------------------------------------------------
 
   function handleGridInput(e: Event): void {
     const target = e.target as HTMLInputElement;
     const val = parseInt(target.value, 10);
-    if (!isNaN(val) && val >= 2 && val <= 32) {
+    if (!isNaN(val) && val >= 1 && val <= 32) {
       gridSizeInput = val;
-      scheduleGridPreview();
+      scheduleGridApply();
     }
   }
 
   function selectCandidate(size: number): void {
     gridSizeInput = size;
-    scheduleGridPreview();
+    scheduleGridApply();
   }
 
   function handleColorInput(e: Event): void {
@@ -294,13 +261,22 @@
     const val = parseInt(target.value, 10);
     if (!isNaN(val) && val >= 2 && val <= 64) {
       colorCountInput = val;
-      scheduleColorPreview();
+      scheduleColorApply();
     }
+    // Ignore values > 64 (the "Original" sentinel) — no auto-apply
+  }
+
+  function selectColorTarget(count: number): void {
+    colorCountInput = count;
+    scheduleColorApply();
   }
 
   function handleMethodChange(e: Event): void {
     colorMethod = (e.target as HTMLSelectElement).value as QuantizeMethod;
-    scheduleColorPreview();
+    // Only auto-apply if colors have already been reduced
+    if (colorsReduced) {
+      scheduleColorApply();
+    }
   }
 </script>
 
@@ -341,20 +317,24 @@
       <div class="input-row">
         <input
           type="range"
-          min="2"
+          min="1"
           max="32"
           bind:value={gridSizeInput}
           oninput={handleGridInput}
           class="slider"
         />
-        <input
-          type="number"
-          min="2"
-          max="32"
-          bind:value={gridSizeInput}
-          oninput={handleGridInput}
-          class="num-input"
-        />
+        {#if gridSizeInput <= 1}
+          <span class="original-label">Original</span>
+        {:else}
+          <input
+            type="number"
+            min="1"
+            max="32"
+            bind:value={gridSizeInput}
+            oninput={handleGridInput}
+            class="num-input"
+          />
+        {/if}
       </div>
 
       {#if topCandidates.length > 0}
@@ -371,16 +351,6 @@
         </div>
       {/if}
 
-      <div class="button-row">
-        <button class="action-btn" onclick={applyGridSnap}>
-          Apply Grid Snap
-        </button>
-        {#if editorState.showingPreview}
-          <button class="action-btn cancel" onclick={cancelGridPreview}>
-            Cancel
-          </button>
-        {/if}
-      </div>
     </div>
 
     <div class="divider"></div>
@@ -401,31 +371,36 @@
         <input
           type="range"
           min="2"
-          max="64"
+          max={colorSliderMax}
           bind:value={colorCountInput}
           oninput={handleColorInput}
           class="slider"
         />
-        <input
-          type="number"
-          min="2"
-          max="64"
-          bind:value={colorCountInput}
-          oninput={handleColorInput}
-          class="num-input"
-        />
-      </div>
-
-      <div class="button-row">
-        <button class="action-btn" onclick={applyReduceColors}>
-          Reduce Colors
-        </button>
-        {#if editorState.showingPreview}
-          <button class="action-btn cancel" onclick={cancelColorPreview}>
-            Cancel
-          </button>
+        {#if colorCountInput >= COLOR_ORIGINAL}
+          <span class="original-label">Original</span>
+        {:else}
+          <input
+            type="number"
+            min="2"
+            max="64"
+            bind:value={colorCountInput}
+            oninput={handleColorInput}
+            class="num-input"
+          />
         {/if}
       </div>
+
+      {#if !colorsReduced}
+        <div class="chip-row">
+          <button
+            class="chip"
+            onclick={() => selectColorTarget(suggestedColorCount)}
+          >
+            {suggestedColorCount} colors
+          </button>
+        </div>
+      {/if}
+
     </div>
   {/if}
 </div>
@@ -493,6 +468,14 @@
     text-align: center;
   }
 
+  .original-label {
+    width: 48px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-align: center;
+    opacity: 0.7;
+  }
+
   .chip-row {
     display: flex;
     gap: 4px;
@@ -519,13 +502,7 @@
     border-color: var(--accent);
   }
 
-  .button-row {
-    display: flex;
-    gap: 6px;
-  }
-
   .action-btn {
-    flex: 1;
     padding: 6px 10px;
     font-size: 12px;
     background: var(--bg-surface);
@@ -548,18 +525,6 @@
 
   .action-btn.accent:hover {
     opacity: 0.9;
-  }
-
-  .action-btn.cancel {
-    flex: none;
-    background: transparent;
-    border-color: var(--text-secondary);
-    color: var(--text-secondary);
-  }
-
-  .action-btn.cancel:hover {
-    background: var(--bg-surface);
-    color: var(--text-primary);
   }
 
   .link-btn {

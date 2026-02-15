@@ -15,3 +15,10 @@ All documentation lives in `docs/`. When in doubt, check the docs before asking.
 - Pixel buffers are `Uint8ClampedArray` (RGBA) — never wrap these in reactive state
 - Canvas 2D for rendering, not WebGL
 - Run `npm test` before considering any task complete
+
+## Releasing
+
+1. Add user-facing changes to the `unreleased` entry in `src/lib/changelog.ts` as you work
+2. When ready to release: `npm run release minor` (or `major`)
+3. The script bumps `package.json`, stamps the changelog, generates `docs/CHANGELOG.md`, commits, and tags
+4. Push with `git push && git push --tags`

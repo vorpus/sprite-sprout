@@ -90,7 +90,7 @@
             {#each changelog as entry}
               <div class="changelog-entry">
                 <div class="changelog-header">
-                  <span class="changelog-version">v{entry.version}</span>
+                  <span class="changelog-version">{entry.version === 'unreleased' ? 'Unreleased' : `v${entry.version}`}</span>
                   <span class="changelog-date">{entry.date}</span>
                 </div>
                 <ul class="changelog-items">

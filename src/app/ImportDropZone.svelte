@@ -11,7 +11,6 @@
 
   let isDragOver = $state(false);
   let isLoading = $state(false);
-  let isDemoLoading = $state(false);
   let errorMessage: string | null = $state(null);
 
   /** Hidden file input element */
@@ -104,20 +103,29 @@
 
   // ---- Demo loader ------------------------------------------------------------
 
-  async function loadDemo(e: MouseEvent): Promise<void> {
+  const DEMOS = [
+    { path: '/fishing-cat.png', label: 'Fishing Cat', type: 'image/png' },
+    { path: '/tired-salaryman.png', label: 'Salaryman', type: 'image/png' },
+    { path: '/demo-sprites.jpg', label: 'Sprite Sheet', type: 'image/jpeg' },
+  ] as const;
+
+  let loadingDemo: string | null = $state(null);
+
+  async function loadDemo(e: MouseEvent, demo: typeof DEMOS[number]): Promise<void> {
     e.stopPropagation();
-    isDemoLoading = true;
+    loadingDemo = demo.path;
     errorMessage = null;
     try {
-      const res = await fetch('/demo-sprites.png');
+      const res = await fetch(demo.path);
       if (!res.ok) throw new Error('Could not load demo image');
       const blob = await res.blob();
-      const file = new File([blob], 'demo-sprites.png', { type: 'image/png' });
+      const filename = demo.path.split('/').pop()!;
+      const file = new File([blob], filename, { type: demo.type });
       await handleImport(file);
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : 'Failed to load demo';
     } finally {
-      isDemoLoading = false;
+      loadingDemo = null;
     }
   }
 
@@ -200,13 +208,18 @@
       <p class="label">Drop an image here</p>
       <p class="hint">or click to browse</p>
       <p class="hint">You can also paste from clipboard</p>
-      <button
-        class="demo-btn"
-        onclick={loadDemo}
-        disabled={isDemoLoading}
-      >
-        {isDemoLoading ? 'Loading demo...' : 'Try a demo image'}
-      </button>
+      <p class="demo-label">Or try one of our sample AI-generated sprite sheets</p>
+      <div class="demo-row">
+        {#each DEMOS as demo}
+          <button
+            class="demo-btn"
+            onclick={(e: MouseEvent) => loadDemo(e, demo)}
+            disabled={loadingDemo !== null}
+          >
+            {loadingDemo === demo.path ? 'Loading...' : demo.label}
+          </button>
+        {/each}
+      </div>
     {/if}
 
     {#if errorMessage}
@@ -274,9 +287,22 @@
     margin-top: 8px;
   }
 
+  .demo-label {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-top: 20px;
+    margin-bottom: 4px;
+  }
+
+  .demo-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: center;
+  }
+
   .demo-btn {
-    margin-top: 16px;
-    padding: 6px 16px;
+    padding: 6px 12px;
     font-size: 12px;
     background: var(--accent, #4fc3f7);
     color: #111;

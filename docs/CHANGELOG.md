@@ -12,6 +12,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Method selector dropdown in Cleanup panel for choosing quantization algorithm
 - Quantize dispatcher module for unified algorithm access
 
+### Changed
+
+- Cleanup controls now auto-apply: adjusting grid size or color sliders immediately commits changes (Ctrl+Z to undo) instead of requiring Apply/Cancel buttons
+- Color reduction always quantizes from a clean pre-reduction snapshot, preventing quality degradation from re-quantizing
+
 ## [0.1.0] - 2026-02-15
 
 ### Added

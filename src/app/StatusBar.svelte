@@ -9,9 +9,6 @@
     }
   }
 
-  function openHelp(): void {
-    editorState.showOnboarding = true;
-  }
 </script>
 
 <span>Sprite Sprout</span>
@@ -49,7 +46,7 @@
       class="ba-btn"
       class:active={editorState.beforeAfterMode === 'hold'}
       onclick={() => setMode('hold')}
-    >Hold</button>
+    >Hold Space</button>
     <button
       class="ba-btn"
       class:active={editorState.beforeAfterMode === 'split'}
@@ -65,8 +62,6 @@
     <span class="showing-original">Showing original</span>
   {/if}
 {/if}
-
-<button class="help-btn" onclick={openHelp} title="About Sprite Sprout">?</button>
 
 <style>
   .spacer {
@@ -120,25 +115,4 @@
     opacity: 0.7;
   }
 
-  .help-btn {
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 16px;
-    text-align: center;
-    border-radius: 50%;
-    border: 1px solid var(--border-color);
-    background: var(--bg-surface);
-    color: var(--text-secondary);
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .help-btn:hover {
-    background: var(--accent);
-    color: #111;
-    border-color: var(--accent);
-  }
 </style>

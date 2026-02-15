@@ -19,11 +19,6 @@
 - **Details**: Pencil/eraser strokes and flood fills call `bumpVersion()` but never `pushHistory()`. Each stroke should snapshot before the first pixel change on mousedown, so the full stroke is one undo entry. Currently, individual pixel changes are not undoable.
 - **Added**: 2026-02-15
 
-### [low] Cleanup preview conflicts between grid and color
-- **Where**: `src/app/CleanupPanel.svelte`
-- **Details**: Both grid and color sections write to the same `editorState.cleanupPreview`. If user starts a grid preview then switches to color slider, the cancel button routes to the wrong clear function. Should either use separate preview slots or track which preview is active.
-- **Added**: 2026-02-15
-
 ### [low] No error handling on image import
 - **Where**: `src/app/ImportDropZone.svelte`, `src/lib/engine/io/import.ts`
 - **Details**: Very large images (2048+), non-image files, and corrupt files can cause unhandled errors. The design spec calls for toast messages and size warnings but these aren't implemented yet.
@@ -36,4 +31,8 @@
 
 ## Resolved
 
-_None yet._
+### [low] Cleanup preview conflicts between grid and color
+- **Where**: `src/app/CleanupPanel.svelte`
+- **Details**: Both grid and color sections wrote to `editorState.cleanupPreview`, causing conflicts and blocking painting. Eliminated by switching to auto-apply: slider changes commit directly to canvas with undo history instead of using a non-interactive preview overlay.
+- **Added**: 2026-02-15
+- **Resolved**: 2026-02-15

@@ -65,7 +65,7 @@
 
 <div class="editor">
   <div class="toolbar">
-    <Toolbar />
+    <Toolbar onhelp={() => { editorState.showOnboarding = true; }} />
   </div>
   <div class="canvas-area">
     <CanvasArea />

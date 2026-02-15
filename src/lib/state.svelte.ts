@@ -108,7 +108,7 @@ class EditorStore {
   showGrid: boolean = $state(true);
   showBeforeAfter: boolean = $state(false);
   showOnboarding: boolean = $state(false);
-  beforeAfterMode: BeforeAfterMode = $state('hold');
+  beforeAfterMode: BeforeAfterMode = $state('split');
   splitPosition: number = $state(0.5); // 0..1, fraction of canvas width
 
   // Viewport dimensions (written by CanvasArea's ResizeObserver)
@@ -162,6 +162,30 @@ class EditorStore {
     };
     this.palette = entry.paletteSnapshot;
     this.bumpVersion();
+  }
+
+  /**
+   * Reset all editor state back to the initial empty state.
+   */
+  reset(): void {
+    this.sourceImage = null;
+    this.canvas = null;
+    this.canvasVersion = 0;
+    this.analysis = null;
+    this.palette = [];
+    this.activeColor = [0, 0, 0, 255];
+    this.activeColorIndex = 0;
+    this.activeTool = 'pencil';
+    this.zoom = 1;
+    this.panX = 0;
+    this.panY = 0;
+    this.cleanupPreview = null;
+    this.showingPreview = false;
+    this.detectedGridSize = null;
+    this.showGrid = true;
+    this.showBeforeAfter = false;
+    this.splitPosition = 0.5;
+    this.history = new HistoryManager();
   }
 }
 

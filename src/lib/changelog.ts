@@ -11,6 +11,7 @@ export const changelog: ChangelogEntry[] = [
     items: [
       'Three new color reduction algorithms: Median Cut, Weighted Octree, Octree + CIELAB Refine',
       'Method selector in Cleanup panel for choosing quantization algorithm',
+      'Cleanup controls auto-apply — no more Apply/Cancel buttons, Ctrl+Z to undo',
     ],
   },
   {
