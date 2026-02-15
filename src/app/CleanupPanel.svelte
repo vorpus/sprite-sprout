@@ -3,6 +3,7 @@
   import { autoClean, suggestColorCount } from '../lib/engine/cleanup/pipeline';
   import { snapToGrid } from '../lib/engine/grid/snap';
   import { extractTopColors } from '../lib/engine/color/palette';
+  import { calculateFitZoom } from '../lib/engine/canvas/renderer';
   import {
     quantize,
     QUANTIZE_METHODS,
@@ -65,6 +66,36 @@
     }
   });
 
+  /**
+   * After a canvas resize, compute zoom/pan to keep the same logical center
+   * visible, or fit-to-view if the old center would be out of bounds.
+   */
+  function recenterViewport(
+    oldW: number, oldH: number,
+    newW: number, newH: number,
+  ): void {
+    const vw = editorState.viewportW;
+    const vh = editorState.viewportH;
+    if (vw <= 0 || vh <= 0) return;
+
+    // What fraction of the old canvas was the viewport center looking at?
+    const oldZoom = editorState.zoom;
+    const centerFracX = ((vw / 2) - editorState.panX) / (oldW * oldZoom);
+    const centerFracY = ((vh / 2) - editorState.panY) / (oldH * oldZoom);
+
+    // Pick a zoom that fits the new canvas
+    const newZoom = calculateFitZoom(newW, newH, vw, vh);
+
+    // Clamp the fraction to [0,1] so we don't pan outside the image
+    const fx = Math.max(0, Math.min(1, centerFracX));
+    const fy = Math.max(0, Math.min(1, centerFracY));
+
+    // Center the viewport on that same logical position
+    editorState.zoom = newZoom;
+    editorState.panX = (vw / 2) - fx * newW * newZoom;
+    editorState.panY = (vh / 2) - fy * newH * newZoom;
+  }
+
   // ---------------------------------------------------------------------------
   // Grid preview (debounced)
   // ---------------------------------------------------------------------------
@@ -107,6 +138,9 @@
     const source = editorState.sourceImage;
     if (!source) return;
 
+    const oldW = canvas.width;
+    const oldH = canvas.height;
+
     const sourceData = new Uint8ClampedArray(source.data);
     const result = snapToGrid(sourceData, source.width, source.height, gridSizeInput);
 
@@ -135,7 +169,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
-    editorState.fitRequest++;
+    recenterViewport(oldW, oldH, result.width, result.height);
     cleanupApplied = true;
   }
 
@@ -206,6 +240,9 @@
     const source = editorState.sourceImage;
     if (!source) return;
 
+    const oldW = editorState.canvas?.width ?? source.width;
+    const oldH = editorState.canvas?.height ?? source.height;
+
     const sourceData = new Uint8ClampedArray(source.data);
     const result = autoClean(sourceData, source.width, source.height);
 
@@ -236,7 +273,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
-    editorState.fitRequest++;
+    recenterViewport(oldW, oldH, finalData.width, finalData.height);
     colorsReduced = result.reduced !== null;
     cleanupApplied = true;
     bannerDismissed = true;

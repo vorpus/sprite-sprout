@@ -552,14 +552,6 @@
 
   // ---- Effects --------------------------------------------------------------
 
-  // Re-fit viewport when requested (grid snap, auto-clean, import, etc.)
-  $effect(() => {
-    editorState.fitRequest; // subscribe to the counter
-    if (editorState.canvas && viewportW > 0 && viewportH > 0) {
-      fitToView();
-    }
-  });
-
   // Re-render whenever canvas version, zoom, pan, or viewport changes
   $effect(() => {
     // Touch reactive dependencies to subscribe
@@ -589,6 +581,8 @@
         const cr = entry.contentRect;
         viewportW = cr.width;
         viewportH = cr.height;
+        editorState.viewportW = cr.width;
+        editorState.viewportH = cr.height;
       }
     });
 

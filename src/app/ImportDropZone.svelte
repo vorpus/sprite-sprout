@@ -5,6 +5,7 @@
     loadImageFromClipboard,
     analyzeImage,
   } from '../lib/engine/io/import';
+  import { calculateFitZoom } from '../lib/engine/canvas/renderer';
 
   // ---- Local reactive state ---------------------------------------------------
 
@@ -45,7 +46,16 @@
 
       // Signal that the canvas has new data
       editorState.bumpVersion();
-      editorState.fitRequest++;
+
+      // Center the imported image in the viewport
+      const vw = editorState.viewportW;
+      const vh = editorState.viewportH;
+      if (vw > 0 && vh > 0) {
+        const z = calculateFitZoom(imageData.width, imageData.height, vw, vh);
+        editorState.zoom = z;
+        editorState.panX = (vw - imageData.width * z) / 2;
+        editorState.panY = (vh - imageData.height * z) / 2;
+      }
     } catch (err) {
       errorMessage =
         err instanceof Error ? err.message : 'Failed to load image';
@@ -134,6 +144,15 @@
 
         editorState.analysis = analyzeImage(imageData);
         editorState.bumpVersion();
+
+        const vw = editorState.viewportW;
+        const vh = editorState.viewportH;
+        if (vw > 0 && vh > 0) {
+          const z = calculateFitZoom(imageData.width, imageData.height, vw, vh);
+          editorState.zoom = z;
+          editorState.panX = (vw - imageData.width * z) / 2;
+          editorState.panY = (vh - imageData.height * z) / 2;
+        }
       } catch (err) {
         errorMessage =
           err instanceof Error ? err.message : 'Failed to load image';
