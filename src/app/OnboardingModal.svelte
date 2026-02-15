@@ -87,7 +87,7 @@
           </div>
         {:else}
           <div class="changelog">
-            {#each changelog as entry}
+            {#each changelog.filter(e => e.items.length > 0) as entry}
               <div class="changelog-entry">
                 <div class="changelog-header">
                   <span class="changelog-version">{entry.version === 'unreleased' ? 'Unreleased' : `v${entry.version}`}</span>
