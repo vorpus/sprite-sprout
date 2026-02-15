@@ -107,6 +107,7 @@ class EditorStore {
   // UI
   showGrid: boolean = $state(true);
   showBeforeAfter: boolean = $state(false);
+  showOnboarding: boolean = $state(false);
   beforeAfterMode: BeforeAfterMode = $state('hold');
   splitPosition: number = $state(0.5); // 0..1, fraction of canvas width
 

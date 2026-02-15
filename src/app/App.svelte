@@ -5,7 +5,22 @@
   import PalettePanel from './PalettePanel.svelte';
   import ExportPanel from './ExportPanel.svelte';
   import StatusBar from './StatusBar.svelte';
+  import OnboardingModal from './OnboardingModal.svelte';
   import { editorState } from '../lib/state.svelte';
+
+  const ONBOARDING_KEY = 'sprite-sprout-onboarding-seen';
+
+  // Show onboarding on first visit
+  if (typeof localStorage !== 'undefined' && !localStorage.getItem(ONBOARDING_KEY)) {
+    editorState.showOnboarding = true;
+  }
+
+  function dismissOnboarding(): void {
+    editorState.showOnboarding = false;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+    }
+  }
 
   let exportPanel: ExportPanel;
 
@@ -66,6 +81,8 @@
     <StatusBar />
   </div>
 </div>
+
+<OnboardingModal show={editorState.showOnboarding} onclose={dismissOnboarding} />
 
 <style>
   .editor {

@@ -44,6 +44,12 @@ Complex work gets a plan doc with progress tracking and decision logs.
 |-----|--------|----------------|
 | [docs/exec-plans/PHASE1-TASKS.md](docs/exec-plans/PHASE1-TASKS.md) | Complete | 12 agent-sized tasks (T1–T12) with dependency graph for MVP |
 
+### Changelog
+
+| Doc | What it covers |
+|-----|----------------|
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | User-facing changelog in Keep a Changelog format |
+
 ### Technical Debt
 
 | Doc | What it covers |
@@ -88,6 +94,7 @@ src/
 | Implementation decisions | `docs/research/NN-phaseX-decisions.md` | During implementation — log each task's key decisions as you go |
 | Execution plans | `docs/exec-plans/` | Before starting complex work — create the plan, track progress inline |
 | Technical debt | `docs/debt/README.md` | The moment you discover it — don't defer |
+| Changelog | `docs/CHANGELOG.md` + `src/lib/changelog.ts` | Every user-facing change — features, fixes, removals |
 | This file (AGENTS.md) | `AGENTS.md` | When new docs are created, phases complete, or architecture changes |
 
 ### Execution plans

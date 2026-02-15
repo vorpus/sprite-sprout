@@ -10,6 +10,7 @@
 
   let isDragOver = $state(false);
   let isLoading = $state(false);
+  let isDemoLoading = $state(false);
   let errorMessage: string | null = $state(null);
 
   /** Hidden file input element */
@@ -90,6 +91,25 @@
     input.value = '';
   }
 
+  // ---- Demo loader ------------------------------------------------------------
+
+  async function loadDemo(e: MouseEvent): Promise<void> {
+    e.stopPropagation();
+    isDemoLoading = true;
+    errorMessage = null;
+    try {
+      const res = await fetch('/demo-sprites.png');
+      if (!res.ok) throw new Error('Could not load demo image');
+      const blob = await res.blob();
+      const file = new File([blob], 'demo-sprites.png', { type: 'image/png' });
+      await handleImport(file);
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : 'Failed to load demo';
+    } finally {
+      isDemoLoading = false;
+    }
+  }
+
   // ---- Clipboard paste --------------------------------------------------------
 
   async function handlePaste(e: ClipboardEvent): Promise<void> {
@@ -160,6 +180,13 @@
       <p class="label">Drop an image here</p>
       <p class="hint">or click to browse</p>
       <p class="hint">You can also paste from clipboard</p>
+      <button
+        class="demo-btn"
+        onclick={loadDemo}
+        disabled={isDemoLoading}
+      >
+        {isDemoLoading ? 'Loading demo...' : 'Try a demo image'}
+      </button>
     {/if}
 
     {#if errorMessage}
@@ -225,5 +252,28 @@
     color: var(--error-color, #ff5555);
     font-size: 12px;
     margin-top: 8px;
+  }
+
+  .demo-btn {
+    margin-top: 16px;
+    padding: 6px 16px;
+    font-size: 12px;
+    background: var(--accent, #4fc3f7);
+    color: #111;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.15s ease;
+  }
+
+  .demo-btn:hover {
+    background: var(--accent-hover, #81d4fa);
+    color: #111;
+  }
+
+  .demo-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>
