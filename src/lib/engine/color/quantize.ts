@@ -234,13 +234,14 @@ export function octreeQuantize(
     findBest(root);
 
     if (bestNode === null) break;
+    const target = bestNode as OctreeNode;
 
     // Absorb the child with the fewest leaves into the parent node
     let minLeaves = Infinity;
     let minIdx = -1;
     for (let i = 0; i < 8; i++) {
-      if (bestNode.children[i] === null) continue;
-      const cl = countLeaves(bestNode.children[i]!);
+      if (target.children[i] === null) continue;
+      const cl = countLeaves(target.children[i]!);
       if (cl < minLeaves) {
         minLeaves = cl;
         minIdx = i;
@@ -249,7 +250,7 @@ export function octreeQuantize(
 
     if (minIdx === -1) break;
 
-    const absorbed = absorbChild(bestNode, minIdx);
+    const absorbed = absorbChild(target, minIdx);
     leafCount -= absorbed;
 
     // If parent was not previously a palette entry (pixelCount was 0 before
@@ -261,10 +262,10 @@ export function octreeQuantize(
     // If 0 children remain, this becomes a leaf
     let remainingChildren = 0;
     for (let i = 0; i < 8; i++) {
-      if (bestNode.children[i] !== null) remainingChildren++;
+      if (target.children[i] !== null) remainingChildren++;
     }
     if (remainingChildren === 0) {
-      bestNode.isLeaf = true;
+      target.isLeaf = true;
       leafCount += 1;
     }
 

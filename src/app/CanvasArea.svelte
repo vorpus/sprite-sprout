@@ -1,6 +1,7 @@
 <script lang="ts">
   import { editorState } from '../lib/state.svelte';
   import ImportDropZone from './ImportDropZone.svelte';
+  import BeforeAfterToggle from './BeforeAfterToggle.svelte';
   import {
     screenToPixel,
     pixelToScreen,
@@ -9,6 +10,13 @@
     prevZoomLevel,
     clampPan,
   } from '../lib/engine/canvas/renderer';
+  import {
+    pencilStroke,
+    eraserStroke,
+    floodFill,
+    pickColor,
+    bresenhamLine,
+  } from '../lib/engine/canvas/tools';
 
   // ---- Local reactive state -------------------------------------------------
 
@@ -40,6 +48,12 @@
   let dirty = false;
   let rafId: number | undefined;
 
+  /** Is a drawing stroke active? (left-click with a tool) */
+  let isDrawing = $state(false);
+
+  /** Last pixel position during a drawing stroke (for Bresenham interpolation) */
+  let lastPixel: { x: number; y: number } | null = $state(null);
+
   /** Offscreen canvas used for building the native-resolution image */
   let offscreen: OffscreenCanvas | undefined;
   let offCtx: OffscreenCanvasRenderingContext2D | undefined | null;
@@ -50,6 +64,101 @@
   let zoom = $derived(editorState.zoom);
   let panX = $derived(editorState.panX);
   let panY = $derived(editorState.panY);
+
+  /** Cursor style based on active tool (overridden by panning state in template) */
+  let toolCursor = $derived.by(() => {
+    switch (editorState.activeTool) {
+      case 'pencil':
+      case 'eraser':
+        return 'crosshair';
+      case 'fill':
+        return 'cell';
+      case 'picker':
+        return 'copy';
+      default:
+        return 'crosshair';
+    }
+  });
+
+  // ---- Drawing tools --------------------------------------------------------
+
+  /**
+   * Convert a pointer event to a pixel coordinate on the sprite canvas.
+   * Returns null if the canvas or display element is unavailable.
+   */
+  function pointerToPixel(e: PointerEvent): { x: number; y: number } | null {
+    if (!displayCanvas || !canvas) return null;
+    const rect = displayCanvas.getBoundingClientRect();
+    const pix = screenToPixel(e.clientX, e.clientY, zoom, panX, panY, rect);
+    return { x: Math.floor(pix.x), y: Math.floor(pix.y) };
+  }
+
+  /**
+   * Apply the current tool at a single pixel coordinate.
+   */
+  function applyToolAt(px: number, py: number): void {
+    if (!canvas) return;
+
+    const tool = editorState.activeTool;
+    const { data, width, height } = canvas;
+
+    switch (tool) {
+      case 'pencil': {
+        const change = pencilStroke(data, width, height, px, py, editorState.activeColor);
+        if (change) editorState.bumpVersion();
+        break;
+      }
+      case 'eraser': {
+        const change = eraserStroke(data, width, height, px, py);
+        if (change) editorState.bumpVersion();
+        break;
+      }
+      case 'fill': {
+        const changes = floodFill(data, width, height, px, py, editorState.activeColor);
+        if (changes.length > 0) editorState.bumpVersion();
+        break;
+      }
+      case 'picker': {
+        const color = pickColor(data, width, height, px, py);
+        // Only pick opaque-ish colors (ignore transparent pixels)
+        if (color[3] > 0) {
+          editorState.activeColor = color;
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Apply pencil/eraser along a Bresenham line from lastPixel to current pixel.
+   */
+  function applyStrokeAlongLine(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ): void {
+    if (!canvas) return;
+
+    const points = bresenhamLine(fromX, fromY, toX, toY);
+    const tool = editorState.activeTool;
+    const { data, width, height } = canvas;
+    let changed = false;
+
+    for (const pt of points) {
+      if (tool === 'pencil') {
+        if (pencilStroke(data, width, height, pt.x, pt.y, editorState.activeColor)) {
+          changed = true;
+        }
+      } else if (tool === 'eraser') {
+        if (eraserStroke(data, width, height, pt.x, pt.y)) {
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) editorState.bumpVersion();
+  }
 
   // ---- Rendering ------------------------------------------------------------
 
@@ -91,6 +200,43 @@
     let dataH: number;
 
     if (
+      editorState.showBeforeAfter &&
+      editorState.beforeAfterMode === 'hold' &&
+      editorState.sourceImage
+    ) {
+      // Hold mode: show original source downscaled to canvas dimensions
+      const src = editorState.sourceImage;
+      const targetW = canvas.width;
+      const targetH = canvas.height;
+
+      if (src.width === targetW && src.height === targetH) {
+        // Same size — use source directly
+        pixelData = src.data;
+        dataW = src.width;
+        dataH = src.height;
+      } else {
+        // Size mismatch — nearest-neighbor downscale to canvas dims
+        const srcOff = new OffscreenCanvas(src.width, src.height);
+        const srcOffCtx = srcOff.getContext('2d');
+        if (srcOffCtx) {
+          srcOffCtx.putImageData(src, 0, 0);
+          const dstOff = new OffscreenCanvas(targetW, targetH);
+          const dstOffCtx = dstOff.getContext('2d');
+          if (dstOffCtx) {
+            dstOffCtx.imageSmoothingEnabled = false;
+            dstOffCtx.drawImage(srcOff, 0, 0, targetW, targetH);
+            const scaled = dstOffCtx.getImageData(0, 0, targetW, targetH);
+            pixelData = scaled.data;
+          } else {
+            pixelData = canvas.data;
+          }
+        } else {
+          pixelData = canvas.data;
+        }
+        dataW = targetW;
+        dataH = targetH;
+      }
+    } else if (
       editorState.showingPreview &&
       editorState.cleanupPreview
     ) {
@@ -241,10 +387,30 @@
   }
 
   function handlePointerDown(e: PointerEvent): void {
-    // Middle-click or Space + left-click
+    // Middle-click or Space + left-click → pan
     if (e.button === 1 || (e.button === 0 && spaceHeld)) {
       e.preventDefault();
       startPan(e);
+      return;
+    }
+
+    // Left-click only → apply tool
+    if (e.button === 0 && canvas) {
+      e.preventDefault();
+      const pix = pointerToPixel(e);
+      if (!pix) return;
+
+      const tool = editorState.activeTool;
+
+      if (tool === 'pencil' || tool === 'eraser') {
+        isDrawing = true;
+        lastPixel = pix;
+        applyToolAt(pix.x, pix.y);
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } else if (tool === 'fill' || tool === 'picker') {
+        // Single-click tools — apply once, no drag
+        applyToolAt(pix.x, pix.y);
+      }
     }
   }
 
@@ -284,17 +450,31 @@
     );
     hoverPixelX = Math.floor(pix.x);
     hoverPixelY = Math.floor(pix.y);
+
+    // Drawing stroke — interpolate from last position
+    if (isDrawing && lastPixel) {
+      const curPix = { x: hoverPixelX, y: hoverPixelY };
+      if (curPix.x !== lastPixel.x || curPix.y !== lastPixel.y) {
+        applyStrokeAlongLine(lastPixel.x, lastPixel.y, curPix.x, curPix.y);
+        lastPixel = curPix;
+      }
+    }
+
     markDirty();
   }
 
   function handlePointerUp(_e: PointerEvent): void {
     isPanning = false;
+    isDrawing = false;
+    lastPixel = null;
   }
 
   function handlePointerLeave(): void {
     hoverPixelX = -1;
     hoverPixelY = -1;
     isPanning = false;
+    isDrawing = false;
+    lastPixel = null;
     markDirty();
   }
 
@@ -302,6 +482,9 @@
 
   function handleKeyDown(e: KeyboardEvent): void {
     if (e.code === 'Space') {
+      // When before/after hold mode is active, Space is used for preview,
+      // not for panning — let BeforeAfterToggle handle it
+      if (editorState.beforeAfterMode === 'hold') return;
       e.preventDefault();
       spaceHeld = true;
     }
@@ -309,6 +492,7 @@
 
   function handleKeyUp(e: KeyboardEvent): void {
     if (e.code === 'Space') {
+      if (editorState.beforeAfterMode === 'hold') return;
       spaceHeld = false;
       if (isPanning) isPanning = false;
     }
@@ -352,6 +536,10 @@
     editorState.showGrid;
     editorState.showingPreview;
     editorState.cleanupPreview;
+    editorState.showBeforeAfter;
+    editorState.beforeAfterMode;
+    editorState.sourceImage;
+    editorState.splitPosition;
     viewportW;
     viewportH;
 
@@ -400,12 +588,14 @@
       bind:this={displayCanvas}
       class="display-canvas"
       class:panning={isPanning || spaceHeld}
+      style:cursor={isPanning || spaceHeld ? undefined : toolCursor}
       onwheel={handleWheel}
       onpointerdown={handlePointerDown}
       onpointermove={handlePointerMove}
       onpointerup={handlePointerUp}
       onpointerleave={handlePointerLeave}
     ></canvas>
+    <BeforeAfterToggle />
   {:else}
     <ImportDropZone />
   {/if}

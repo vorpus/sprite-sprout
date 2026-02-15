@@ -2,8 +2,50 @@
   import Toolbar from './Toolbar.svelte';
   import CanvasArea from './CanvasArea.svelte';
   import CleanupPanel from './CleanupPanel.svelte';
+  import ExportPanel from './ExportPanel.svelte';
   import StatusBar from './StatusBar.svelte';
+  import { editorState } from '../lib/state.svelte';
+
+  let exportPanel: ExportPanel;
+
+  function handleKeydown(e: KeyboardEvent): void {
+    const mod = e.metaKey || e.ctrlKey;
+
+    // Ctrl+Shift+E — download at native resolution
+    if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+      e.preventDefault();
+      exportPanel?.triggerDownload();
+    }
+    // Ctrl+Shift+C — copy to clipboard
+    if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+      e.preventDefault();
+      exportPanel?.triggerCopy();
+    }
+
+    if (!mod) return;
+
+    // Ctrl+Shift+Z or Ctrl+Y — Redo
+    if ((e.key === 'z' || e.key === 'Z') && e.shiftKey) {
+      e.preventDefault();
+      editorState.redo();
+      return;
+    }
+    if (e.key === 'y' && !e.shiftKey) {
+      e.preventDefault();
+      editorState.redo();
+      return;
+    }
+
+    // Ctrl+Z — Undo
+    if (e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      editorState.undo();
+      return;
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="editor">
   <div class="toolbar">
@@ -14,6 +56,8 @@
   </div>
   <div class="panel-right">
     <CleanupPanel />
+    <div class="panel-divider"></div>
+    <ExportPanel bind:this={exportPanel} />
   </div>
   <div class="status-bar">
     <StatusBar />
@@ -61,5 +105,11 @@
     padding: 0 12px;
     font-size: 11px;
     color: var(--text-secondary);
+  }
+
+  .panel-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 0 12px;
   }
 </style>

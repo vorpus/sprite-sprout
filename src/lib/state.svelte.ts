@@ -1,4 +1,7 @@
 import type { Color, CanvasState, CleanupPreview, ToolType, ImageAnalysis } from './types';
+import { HistoryManager } from './engine/history/undo';
+
+export type BeforeAfterMode = 'hold' | 'split' | 'off';
 
 // ---------------------------------------------------------------------------
 // Helper functions for pixel manipulation (pure, work on raw buffers)
@@ -104,6 +107,11 @@ class EditorStore {
   // UI
   showGrid: boolean = $state(true);
   showBeforeAfter: boolean = $state(false);
+  beforeAfterMode: BeforeAfterMode = $state('hold');
+  splitPosition: number = $state(0.5); // 0..1, fraction of canvas width
+
+  // History (undo/redo)
+  history = new HistoryManager();
 
   /**
    * Increment the canvas version counter to signal that the underlying
@@ -111,6 +119,44 @@ class EditorStore {
    */
   bumpVersion(): void {
     this.canvasVersion++;
+  }
+
+  /**
+   * Snapshot the current canvas + palette into history BEFORE an operation.
+   */
+  pushHistory(label: string): void {
+    if (!this.canvas) return;
+    this.history.push(label, this.canvas, this.palette);
+  }
+
+  /**
+   * Undo: restore the previous canvas + palette from history.
+   */
+  undo(): void {
+    const entry = this.history.undo();
+    if (!entry) return;
+    this.canvas = {
+      width: entry.canvasSnapshot.width,
+      height: entry.canvasSnapshot.height,
+      data: entry.canvasSnapshot.data,
+    };
+    this.palette = entry.paletteSnapshot;
+    this.bumpVersion();
+  }
+
+  /**
+   * Redo: restore the next canvas + palette from history.
+   */
+  redo(): void {
+    const entry = this.history.redo();
+    if (!entry) return;
+    this.canvas = {
+      width: entry.canvasSnapshot.width,
+      height: entry.canvasSnapshot.height,
+      data: entry.canvasSnapshot.data,
+    };
+    this.palette = entry.paletteSnapshot;
+    this.bumpVersion();
   }
 }
 
