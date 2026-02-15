@@ -236,6 +236,23 @@ export function detectGridSize(
     combined.set(size, runsScore * 0.4 + edgeScore * 0.6);
   }
 
+  // Harmonic suppression: a grid of size N has all its edges at multiples
+  // of any divisor D < N, so smaller divisors inherit the larger grid's
+  // edge signal and score artificially high. Penalize a candidate when a
+  // multiple of it scores nearly as well — that multiple is the true grid.
+  for (const [small, smallScore] of combined) {
+    if (small < 2) continue;
+    for (const [big, bigScore] of combined) {
+      if (big <= small || big % small !== 0) continue;
+      // If the multiple scores at least 70% as high, the small candidate
+      // is just riding the larger grid's edges — suppress it.
+      if (bigScore >= smallScore * 0.7) {
+        combined.set(small, smallScore * 0.3);
+        break; // one suppression is enough
+      }
+    }
+  }
+
   // Sort by combined score descending
   const sorted = Array.from(combined.entries())
     .sort((a, b) => b[1] - a[1]);
