@@ -58,6 +58,10 @@
   let offscreen: OffscreenCanvas | undefined;
   let offCtx: OffscreenCanvasRenderingContext2D | undefined | null;
 
+  /** Secondary offscreen canvas for source image in before/after */
+  let srcOffscreen: OffscreenCanvas | undefined;
+  let srcOffCtx: OffscreenCanvasRenderingContext2D | undefined | null;
+
   // ---- Derived values -------------------------------------------------------
 
   let canvas = $derived(editorState.canvas);
@@ -168,6 +172,44 @@
     rafId = requestAnimationFrame(render);
   }
 
+  /**
+   * Prepare an offscreen canvas with the source image data for before/after.
+   * Returns the offscreen canvas or undefined if unavailable.
+   */
+  function prepareSourceOffscreen(): OffscreenCanvas | undefined {
+    const src = editorState.sourceImage;
+    if (!src) return undefined;
+
+    if (
+      !srcOffscreen ||
+      srcOffscreen.width !== src.width ||
+      srcOffscreen.height !== src.height
+    ) {
+      srcOffscreen = new OffscreenCanvas(src.width, src.height);
+      srcOffCtx = srcOffscreen.getContext('2d');
+    }
+    if (!srcOffCtx) return undefined;
+
+    srcOffCtx.putImageData(src, 0, 0);
+    return srcOffscreen;
+  }
+
+  /**
+   * Draw an image buffer onto the display canvas at the given zoom and pan.
+   */
+  function drawAligned(
+    ctx: CanvasRenderingContext2D,
+    source: OffscreenCanvas,
+    sourceW: number,
+    sourceH: number,
+    drawZoom: number,
+    drawPanX: number,
+    drawPanY: number,
+  ): void {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(source, drawPanX, drawPanY, sourceW * drawZoom, sourceH * drawZoom);
+  }
+
   function render(): void {
     dirty = false;
     rafId = undefined;
@@ -194,52 +236,12 @@
     // 1. Clear
     ctx.clearRect(0, 0, w, h);
 
-    // 2. Determine which pixel data to show
+    // 2. Determine which pixel data to show for the "current" canvas
     let pixelData: Uint8ClampedArray;
     let dataW: number;
     let dataH: number;
 
-    if (
-      editorState.showBeforeAfter &&
-      editorState.beforeAfterMode === 'hold' &&
-      editorState.sourceImage
-    ) {
-      // Hold mode: show original source downscaled to canvas dimensions
-      const src = editorState.sourceImage;
-      const targetW = canvas.width;
-      const targetH = canvas.height;
-
-      if (src.width === targetW && src.height === targetH) {
-        // Same size — use source directly
-        pixelData = src.data;
-        dataW = src.width;
-        dataH = src.height;
-      } else {
-        // Size mismatch — nearest-neighbor downscale to canvas dims
-        const srcOff = new OffscreenCanvas(src.width, src.height);
-        const srcOffCtx = srcOff.getContext('2d');
-        if (srcOffCtx) {
-          srcOffCtx.putImageData(src, 0, 0);
-          const dstOff = new OffscreenCanvas(targetW, targetH);
-          const dstOffCtx = dstOff.getContext('2d');
-          if (dstOffCtx) {
-            dstOffCtx.imageSmoothingEnabled = false;
-            dstOffCtx.drawImage(srcOff, 0, 0, targetW, targetH);
-            const scaled = dstOffCtx.getImageData(0, 0, targetW, targetH);
-            pixelData = scaled.data;
-          } else {
-            pixelData = canvas.data;
-          }
-        } else {
-          pixelData = canvas.data;
-        }
-        dataW = targetW;
-        dataH = targetH;
-      }
-    } else if (
-      editorState.showingPreview &&
-      editorState.cleanupPreview
-    ) {
+    if (editorState.showingPreview && editorState.cleanupPreview) {
       pixelData = editorState.cleanupPreview.data;
       dataW = editorState.cleanupPreview.width;
       dataH = editorState.cleanupPreview.height;
@@ -249,36 +251,60 @@
       dataH = canvas.height;
     }
 
-    // 3. Write pixel data to offscreen canvas at native resolution
-    if (
-      !offscreen ||
-      offscreen.width !== dataW ||
-      offscreen.height !== dataH
-    ) {
+    // 3. Prepare the "current" offscreen
+    if (!offscreen || offscreen.width !== dataW || offscreen.height !== dataH) {
       offscreen = new OffscreenCanvas(dataW, dataH);
       offCtx = offscreen.getContext('2d');
     }
-
     if (!offCtx) return;
 
-    const imgData = new ImageData(
-      new Uint8ClampedArray(pixelData),
-      dataW,
-      dataH,
-    );
+    const imgData = new ImageData(new Uint8ClampedArray(pixelData), dataW, dataH);
     offCtx.putImageData(imgData, 0, 0);
 
-    // 4. Draw offscreen canvas scaled by zoom, offset by pan
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(
-      offscreen,
-      panX,
-      panY,
-      dataW * zoom,
-      dataH * zoom,
-    );
+    // 4. Render based on before/after mode
+    const src = editorState.sourceImage;
+    const isHold = editorState.showBeforeAfter && editorState.beforeAfterMode === 'hold' && src;
+    const isSplit = editorState.beforeAfterMode === 'split' && src && editorState.canvas;
 
-    // 5. Grid lines
+    if (isHold) {
+      // Hold mode: render source at aligned zoom (same pan, adjusted zoom)
+      const srcOff = prepareSourceOffscreen();
+      if (srcOff && src) {
+        const sourceZoom = zoom * canvas.width / src.width;
+        drawAligned(ctx, srcOff, src.width, src.height, sourceZoom, panX, panY);
+      } else {
+        // Fallback: render current canvas
+        drawAligned(ctx, offscreen, dataW, dataH, zoom, panX, panY);
+      }
+    } else if (isSplit && src) {
+      // Split mode: render both through the canvas pipeline
+      const splitScreenX = Math.round(editorState.splitPosition * w);
+
+      // Right side: current canvas (clipped to right of divider)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(splitScreenX, 0, w - splitScreenX, h);
+      ctx.clip();
+      drawAligned(ctx, offscreen, dataW, dataH, zoom, panX, panY);
+      ctx.restore();
+
+      // Left side: source at aligned zoom (clipped to left of divider)
+      const srcOff = prepareSourceOffscreen();
+      if (srcOff) {
+        const sourceZoom = zoom * canvas.width / src.width;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, splitScreenX, h);
+        ctx.clip();
+        drawAligned(ctx, srcOff, src.width, src.height, sourceZoom, panX, panY);
+        ctx.restore();
+      }
+    } else {
+      // Normal: render current canvas
+      drawAligned(ctx, offscreen, dataW, dataH, zoom, panX, panY);
+    }
+
+    // 5. Grid lines (always based on current canvas dimensions)
     if (editorState.showGrid && zoom >= 6) {
       drawGrid(ctx, dataW, dataH);
     }

@@ -6,7 +6,6 @@
   function handleKeyDown(e: KeyboardEvent): void {
     if (editorState.beforeAfterMode !== 'hold') return;
     if (e.code !== 'Space') return;
-    // Don't intercept space when user is typing in an input/textarea
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     e.preventDefault();
@@ -41,92 +40,37 @@
     isDraggingSplit = false;
   }
 
-  // Derived: should show the split overlay?
   let showSplit = $derived(
     editorState.beforeAfterMode === 'split' &&
     editorState.sourceImage !== null &&
     editorState.canvas !== null,
   );
 
-  // Derived: should show the "before" full overlay (hold mode)?
-  let showHoldOverlay = $derived(
+  let showHoldLabel = $derived(
     editorState.beforeAfterMode === 'hold' &&
     editorState.showBeforeAfter &&
     editorState.sourceImage !== null &&
     editorState.canvas !== null,
   );
-
-  // Build a downscaled nearest-neighbor ImageData from source that matches canvas dims
-  let downscaledSourceUrl = $derived.by((): string | null => {
-    if (!editorState.sourceImage || !editorState.canvas) return null;
-    const src = editorState.sourceImage;
-    const cw = editorState.canvas.width;
-    const ch = editorState.canvas.height;
-
-    // Create an offscreen canvas at the target (canvas) dimensions
-    const off = new OffscreenCanvas(cw, ch);
-    const ctx = off.getContext('2d');
-    if (!ctx) return null;
-
-    // First put source into a temp canvas at its native size
-    const srcCanvas = new OffscreenCanvas(src.width, src.height);
-    const srcCtx = srcCanvas.getContext('2d');
-    if (!srcCtx) return null;
-    srcCtx.putImageData(src, 0, 0);
-
-    // Draw with nearest-neighbor downscale
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(srcCanvas, 0, 0, cw, ch);
-
-    // Convert to a blob URL
-    // Since $derived must be synchronous, we use a canvas data URL
-    const tmpCanvas = document.createElement('canvas');
-    tmpCanvas.width = cw;
-    tmpCanvas.height = ch;
-    const tmpCtx = tmpCanvas.getContext('2d');
-    if (!tmpCtx) return null;
-    tmpCtx.drawImage(off, 0, 0);
-    return tmpCanvas.toDataURL();
-  });
 </script>
 
-<!-- Hold mode: listen for spacebar globally (handlers check mode internally) -->
+<!-- Hold mode: spacebar listener -->
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
-<!-- Hold overlay: show source image over the entire canvas area -->
-{#if showHoldOverlay && downscaledSourceUrl}
-  <div class="hold-overlay">
-    <img
-      src={downscaledSourceUrl}
-      alt="Original source"
-      class="pixelated overlay-img"
-      draggable="false"
-    />
-    <div class="hold-label">Original</div>
-  </div>
+<!-- Hold mode: just a label overlay (rendering is done by CanvasArea) -->
+{#if showHoldLabel}
+  <div class="hold-label">Original</div>
 {/if}
 
-<!-- Split overlay: left side shows source, right side shows canvas -->
-{#if showSplit && downscaledSourceUrl}
+<!-- Split mode: divider handle + labels (rendering is done by CanvasArea) -->
+{#if showSplit}
   <div
     class="split-container"
     bind:this={containerEl}
     role="separator"
     aria-label="Before/after split divider"
   >
-    <!-- Left side: source image, clipped by split position -->
-    <div
-      class="split-left"
-      style="clip-path: inset(0 {(1 - editorState.splitPosition) * 100}% 0 0);"
-    >
-      <img
-        src={downscaledSourceUrl}
-        alt="Original source"
-        class="pixelated overlay-img"
-        draggable="false"
-      />
-      <div class="split-label left-label">Before</div>
-    </div>
+    <div class="split-label left-label">Before</div>
 
     <!-- Divider handle -->
     <div
@@ -150,7 +94,6 @@
       </div>
     </div>
 
-    <!-- Right label (always visible on the right half) -->
     <div
       class="split-label right-label"
       style="left: {editorState.splitPosition * 100}%;"
@@ -161,31 +104,12 @@
 {/if}
 
 <style>
-  /* ---- Hold overlay ---- */
-  .hold-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-secondary, #16213e);
-    pointer-events: none;
-  }
-
-  .overlay-img {
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-
   .hold-label {
     position: absolute;
     top: 8px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 10;
     background: rgba(0, 0, 0, 0.6);
     color: var(--accent, #4fc3f7);
     padding: 2px 10px;
@@ -195,21 +119,10 @@
     white-space: nowrap;
   }
 
-  /* ---- Split overlay ---- */
   .split-container {
     position: absolute;
     inset: 0;
     z-index: 10;
-    pointer-events: none;
-  }
-
-  .split-left {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-secondary, #16213e);
     pointer-events: none;
   }
 
@@ -233,7 +146,6 @@
     margin-left: 12px;
   }
 
-  /* ---- Divider ---- */
   .split-divider {
     position: absolute;
     top: 0;
