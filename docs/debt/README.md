@@ -14,7 +14,25 @@
 
 ## Active
 
-_No debt items yet — project hasn't started implementation._
+### [low] No pushHistory calls in drawing tools
+- **Where**: `src/app/CanvasArea.svelte` (applyToolAt, applyStrokeAlongLine)
+- **Details**: Pencil/eraser strokes and flood fills call `bumpVersion()` but never `pushHistory()`. Each stroke should snapshot before the first pixel change on mousedown, so the full stroke is one undo entry. Currently, individual pixel changes are not undoable.
+- **Added**: 2026-02-15
+
+### [low] Cleanup preview conflicts between grid and color
+- **Where**: `src/app/CleanupPanel.svelte`
+- **Details**: Both grid and color sections write to the same `editorState.cleanupPreview`. If user starts a grid preview then switches to color slider, the cancel button routes to the wrong clear function. Should either use separate preview slots or track which preview is active.
+- **Added**: 2026-02-15
+
+### [low] No error handling on image import
+- **Where**: `src/app/ImportDropZone.svelte`, `src/lib/engine/io/import.ts`
+- **Details**: Very large images (2048+), non-image files, and corrupt files can cause unhandled errors. The design spec calls for toast messages and size warnings but these aren't implemented yet.
+- **Added**: 2026-02-15
+
+### [low] Export requires secure context
+- **Where**: `src/lib/engine/io/export.ts` (copyToClipboard)
+- **Details**: `navigator.clipboard.write()` requires HTTPS or localhost. No fallback for non-secure contexts. Should gracefully degrade with a user message.
+- **Added**: 2026-02-15
 
 ## Resolved
 

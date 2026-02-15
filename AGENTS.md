@@ -34,6 +34,7 @@ Deep dives completed during planning. Reference before making architectural deci
 | [docs/research/02-wasm-analysis.md](docs/research/02-wasm-analysis.md) | JS vs WASM benchmarks — conclusion: JS is fast enough |
 | [docs/research/03-features-and-ux.md](docs/research/03-features-and-ux.md) | AI pixel art problems ranked, feature prioritization, UX patterns |
 | [docs/research/04-animation-and-export.md](docs/research/04-animation-and-export.md) | Animation data model, GIF pipeline, sprite sheets, layer system |
+| [docs/research/05-phase1-decisions.md](docs/research/05-phase1-decisions.md) | Implementation decisions made during Phase 1 (per-task) |
 
 ### Execution Plans
 
@@ -41,7 +42,7 @@ Complex work gets a plan doc with progress tracking and decision logs.
 
 | Doc | Status | What it covers |
 |-----|--------|----------------|
-| [docs/exec-plans/PHASE1-TASKS.md](docs/exec-plans/PHASE1-TASKS.md) | Active | 12 agent-sized tasks (T1–T12) with dependency graph for MVP |
+| [docs/exec-plans/PHASE1-TASKS.md](docs/exec-plans/PHASE1-TASKS.md) | Complete | 12 agent-sized tasks (T1–T12) with dependency graph for MVP |
 
 ### Technical Debt
 
@@ -107,7 +108,7 @@ When you discover debt during implementation, add it to `docs/debt/README.md` wi
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| 1 | MVP: import → cleanup → draw → export | Not started |
+| 1 | MVP: import → cleanup → draw → export | **Complete** |
 | 2 | Power features: palette lock, orphan removal, outline repair | — |
 | 3 | Animation: timeline, onion skin, GIF/spritesheet export | — |
 | 4 | Polish: dithering, smart eraser, project files, shortcuts | — |
