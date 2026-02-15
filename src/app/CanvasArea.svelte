@@ -1,5 +1,6 @@
 <script lang="ts">
   import { editorState } from '../lib/state.svelte';
+  import ImportDropZone from './ImportDropZone.svelte';
   import {
     screenToPixel,
     pixelToScreen,
@@ -406,10 +407,7 @@
       onpointerleave={handlePointerLeave}
     ></canvas>
   {:else}
-    <div class="canvas-placeholder">
-      <p>Canvas</p>
-      <p class="hint">Drop an image here to start</p>
-    </div>
+    <ImportDropZone />
   {/if}
 </div>
 
@@ -435,18 +433,4 @@
     cursor: grab;
   }
 
-  .canvas-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-secondary);
-    gap: 8px;
-  }
-
-  .hint {
-    font-size: 12px;
-    opacity: 0.6;
-  }
 </style>
