@@ -67,33 +67,31 @@
   });
 
   /**
-   * After a canvas resize, compute zoom/pan to keep the same logical center
-   * visible, or fit-to-view if the old center would be out of bounds.
+   * Fit and center the canvas in the viewport after a resize.
+   * Falls back to reading the DOM if editorState viewport values aren't set.
    */
-  function recenterViewport(
-    oldW: number, oldH: number,
-    newW: number, newH: number,
-  ): void {
-    const vw = editorState.viewportW;
-    const vh = editorState.viewportH;
-    if (vw <= 0 || vh <= 0) return;
+  function fitAndCenter(canvasW: number, canvasH: number): void {
+    let vw = editorState.viewportW;
+    let vh = editorState.viewportH;
 
-    // What fraction of the old canvas was the viewport center looking at?
-    const oldZoom = editorState.zoom;
-    const centerFracX = ((vw / 2) - editorState.panX) / (oldW * oldZoom);
-    const centerFracY = ((vh / 2) - editorState.panY) / (oldH * oldZoom);
+    // Fallback: read from the canvas container element directly
+    if (vw <= 0 || vh <= 0) {
+      const el = document.querySelector('[role="application"][aria-label="Pixel art canvas"]');
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        vw = rect.width;
+        vh = rect.height;
+        editorState.viewportW = vw;
+        editorState.viewportH = vh;
+      }
+    }
 
-    // Pick a zoom that fits the new canvas
-    const newZoom = calculateFitZoom(newW, newH, vw, vh);
+    if (vw <= 0 || vh <= 0 || canvasW <= 0 || canvasH <= 0) return;
 
-    // Clamp the fraction to [0,1] so we don't pan outside the image
-    const fx = Math.max(0, Math.min(1, centerFracX));
-    const fy = Math.max(0, Math.min(1, centerFracY));
-
-    // Center the viewport on that same logical position
+    const newZoom = calculateFitZoom(canvasW, canvasH, vw, vh);
     editorState.zoom = newZoom;
-    editorState.panX = (vw / 2) - fx * newW * newZoom;
-    editorState.panY = (vh / 2) - fy * newH * newZoom;
+    editorState.panX = (vw - canvasW * newZoom) / 2;
+    editorState.panY = (vh - canvasH * newZoom) / 2;
   }
 
   // ---------------------------------------------------------------------------
@@ -138,9 +136,6 @@
     const source = editorState.sourceImage;
     if (!source) return;
 
-    const oldW = canvas.width;
-    const oldH = canvas.height;
-
     const sourceData = new Uint8ClampedArray(source.data);
     const result = snapToGrid(sourceData, source.width, source.height, gridSizeInput);
 
@@ -169,7 +164,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
-    recenterViewport(oldW, oldH, result.width, result.height);
+    fitAndCenter(result.width, result.height);
     cleanupApplied = true;
   }
 
@@ -240,9 +235,6 @@
     const source = editorState.sourceImage;
     if (!source) return;
 
-    const oldW = editorState.canvas?.width ?? source.width;
-    const oldH = editorState.canvas?.height ?? source.height;
-
     const sourceData = new Uint8ClampedArray(source.data);
     const result = autoClean(sourceData, source.width, source.height);
 
@@ -273,7 +265,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
-    recenterViewport(oldW, oldH, finalData.width, finalData.height);
+    fitAndCenter(finalData.width, finalData.height);
     colorsReduced = result.reduced !== null;
     cleanupApplied = true;
     bannerDismissed = true;
