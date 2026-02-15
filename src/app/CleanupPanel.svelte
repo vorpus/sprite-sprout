@@ -67,6 +67,19 @@
       : 16,
   );
 
+  // Reset local cleanup state when a new image is loaded (or cleared)
+  $effect(() => {
+    editorState.sourceImage; // subscribe
+    gridSizeInput = 1;
+    colorCountInput = COLOR_ORIGINAL;
+    colorsReduced = false;
+    bannerDismissed = false;
+    cleanupApplied = false;
+    preColorSnapshot = null;
+    clearTimeout(gridDebounceTimer);
+    clearTimeout(colorDebounceTimer);
+  });
+
   /**
    * Fit and center the canvas in the viewport after a resize.
    * Falls back to reading the DOM if editorState viewport values aren't set.
