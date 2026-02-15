@@ -1,0 +1,55 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-panel: #1e2a45;
+  --bg-surface: #253354;
+  --border-color: #2a3a5c;
+  --text-primary: #e0e0e0;
+  --text-secondary: #8899aa;
+  --accent: #4fc3f7;
+  --accent-hover: #81d4fa;
+  --danger: #ef5350;
+  --success: #66bb6a;
+
+  --panel-width: 220px;
+  --statusbar-height: 28px;
+  --toolbar-width: 48px;
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent);
+  color: #111;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
