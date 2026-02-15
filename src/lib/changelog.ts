@@ -17,6 +17,7 @@ export const changelog: ChangelogEntry[] = [
       'Grid and color sliders start at "Original" — no confusing pre-filled values',
       'Color slider sentinel (65 = Original) locks to 1–64 after first reduction',
       'Before/after defaults to split view',
+      'Fix: cleanup controls (grid size, colors) no longer re-trigger the auto-clean banner',
       'Release script: npm run release minor|major',
     ],
   },

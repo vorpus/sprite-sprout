@@ -30,9 +30,10 @@
   // re-quantizing already-quantized data when the user adjusts color settings.
   let preColorSnapshot: CanvasState | null = $state(null);
 
-  // Debounce timers
-  let gridDebounceTimer: ReturnType<typeof setTimeout> | undefined = $state(undefined);
-  let colorDebounceTimer: ReturnType<typeof setTimeout> | undefined = $state(undefined);
+  // Debounce timers (plain variables — NOT $state, so they don't become
+  // spurious dependencies of the sourceImage-reset $effect below)
+  let gridDebounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  let colorDebounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
   // ---------------------------------------------------------------------------
   // Derived values
