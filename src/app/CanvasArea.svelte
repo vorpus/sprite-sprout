@@ -552,17 +552,11 @@
 
   // ---- Effects --------------------------------------------------------------
 
-  // Re-fit viewport when canvas dimensions change (grid snap, auto-clean, etc.)
-  let prevCanvasW = 0;
-  let prevCanvasH = 0;
+  // Re-fit viewport when requested (grid snap, auto-clean, import, etc.)
   $effect(() => {
-    const w = editorState.canvas?.width ?? 0;
-    const h = editorState.canvas?.height ?? 0;
-    if (w > 0 && h > 0 && (w !== prevCanvasW || h !== prevCanvasH)) {
-      prevCanvasW = w;
-      prevCanvasH = h;
-      // Defer to next tick so viewportW/H are current
-      queueMicrotask(() => fitToView());
+    editorState.fitRequest; // subscribe to the counter
+    if (editorState.canvas && viewportW > 0 && viewportH > 0) {
+      fitToView();
     }
   });
 

@@ -111,6 +111,9 @@ class EditorStore {
   beforeAfterMode: BeforeAfterMode = $state('hold');
   splitPosition: number = $state(0.5); // 0..1, fraction of canvas width
 
+  // Viewport: bump to request CanvasArea re-fit after dimension changes
+  fitRequest: number = $state(0);
+
   // History (undo/redo)
   history = new HistoryManager();
 

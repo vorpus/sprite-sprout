@@ -135,6 +135,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
+    editorState.fitRequest++;
     cleanupApplied = true;
   }
 
@@ -235,6 +236,7 @@
     editorState.cleanupPreview = null;
     editorState.showingPreview = false;
     editorState.bumpVersion();
+    editorState.fitRequest++;
     colorsReduced = result.reduced !== null;
     cleanupApplied = true;
     bannerDismissed = true;

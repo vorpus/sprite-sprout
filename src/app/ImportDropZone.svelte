@@ -45,6 +45,7 @@
 
       // Signal that the canvas has new data
       editorState.bumpVersion();
+      editorState.fitRequest++;
     } catch (err) {
       errorMessage =
         err instanceof Error ? err.message : 'Failed to load image';
