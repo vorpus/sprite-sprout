@@ -8,6 +8,11 @@ export const changelog: ChangelogEntry[] = [
   {
     version: 'unreleased',
     date: '',
+    items: [],
+  },
+  {
+    version: '0.3.0',
+    date: '2026-02-15',
     items: [
       'Material Symbols icons for toolbar (pencil, eraser, fill, picker)',
       'Instant tooltips with tool name and keyboard shortcut',
