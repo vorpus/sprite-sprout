@@ -6,6 +6,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-15
+
+- OKLab + Refine quantization method — k-means refinement in OKLab perceptual color space for better palette quality
+
 ## [0.3.0] - 2026-02-15
 
 - Material Symbols icons for toolbar (pencil, eraser, fill, picker)
