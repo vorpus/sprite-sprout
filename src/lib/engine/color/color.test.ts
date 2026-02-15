@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { rgbToLab, deltaE, rgbDeltaE } from './distance';
+import { rgbToLab, deltaE, rgbDeltaE, rgbToOklab, oklabToRgb, oklabDistance } from './distance';
 import { extractColors, extractTopColors } from './palette';
 import { octreeQuantize, octreeQuantizeWeighted } from './quantize';
 import { medianCutQuantize } from './median-cut';
-import { refineWithKMeans } from './refine';
+import { refineWithKMeans, refineWithKMeansOklab } from './refine';
 import { quantize, type QuantizeMethod } from './quantize-dispatch';
 import { remapToPalette, mergePaletteColors } from './remap';
 import type { Color } from '../../types';
@@ -84,6 +84,78 @@ describe('rgbDeltaE', () => {
   it('returns 0 for same color', () => {
     const c: Color = [128, 64, 32, 255];
     expect(rgbDeltaE(c, c)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// distance.ts — OKLab
+// ---------------------------------------------------------------------------
+
+describe('rgbToOklab', () => {
+  it('converts black to [0, 0, 0]', () => {
+    const [L, a, b] = rgbToOklab(0, 0, 0);
+    expect(L).toBeCloseTo(0, 2);
+    expect(a).toBeCloseTo(0, 2);
+    expect(b).toBeCloseTo(0, 2);
+  });
+
+  it('converts white to [1, ~0, ~0]', () => {
+    const [L, a, b] = rgbToOklab(255, 255, 255);
+    expect(L).toBeCloseTo(1, 1);
+    expect(Math.abs(a)).toBeLessThan(0.01);
+    expect(Math.abs(b)).toBeLessThan(0.01);
+  });
+
+  it('converts pure red to known OKLab values', () => {
+    const [L, a, b] = rgbToOklab(255, 0, 0);
+    // Expected roughly L≈0.628, a≈0.225, b≈0.126
+    expect(L).toBeCloseTo(0.628, 1);
+    expect(a).toBeGreaterThan(0.2);
+    expect(b).toBeGreaterThan(0.1);
+  });
+});
+
+describe('oklabToRgb', () => {
+  it('round-trips through OKLab and back within ±1', () => {
+    const testColors: [number, number, number][] = [
+      [0, 0, 0],
+      [255, 255, 255],
+      [255, 0, 0],
+      [0, 255, 0],
+      [0, 0, 255],
+      [128, 64, 32],
+      [42, 100, 200],
+    ];
+
+    for (const [r, g, b] of testColors) {
+      const lab = rgbToOklab(r, g, b);
+      const [rOut, gOut, bOut] = oklabToRgb(lab[0], lab[1], lab[2]);
+      expect(Math.abs(rOut - r)).toBeLessThanOrEqual(1);
+      expect(Math.abs(gOut - g)).toBeLessThanOrEqual(1);
+      expect(Math.abs(bOut - b)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('oklabDistance', () => {
+  it('returns 0 for identical colors', () => {
+    const lab: [number, number, number] = [0.5, 0.1, -0.1];
+    expect(oklabDistance(lab, lab)).toBe(0);
+  });
+
+  it('returns a large value for black vs white', () => {
+    const black = rgbToOklab(0, 0, 0);
+    const white = rgbToOklab(255, 255, 255);
+    const d = oklabDistance(black, white);
+    expect(d).toBeGreaterThan(0.9); // L difference alone is ~1.0
+  });
+
+  it('returns a smaller value for similar colors', () => {
+    const c1 = rgbToOklab(100, 100, 100);
+    const c2 = rgbToOklab(105, 100, 100);
+    const d = oklabDistance(c1, c2);
+    expect(d).toBeLessThan(0.05);
+    expect(d).toBeGreaterThan(0);
   });
 });
 
@@ -604,6 +676,98 @@ describe('refineWithKMeans', () => {
 });
 
 // ---------------------------------------------------------------------------
+// refine.ts — OKLab
+// ---------------------------------------------------------------------------
+
+describe('refineWithKMeansOklab', () => {
+  it('takes an initial palette and refines it — palette length should not change', () => {
+    const colors: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 255, 0, 255],
+      [255, 0, 255, 255],
+      [0, 255, 255, 255],
+      [128, 0, 0, 255],
+      [0, 128, 0, 255],
+    ];
+    const pixels: Color[] = [];
+    for (const c of colors) {
+      pixels.push(c, c);
+    }
+    const data = makeImageData(pixels);
+
+    const initial = octreeQuantize(data, 4, 4, 4);
+    const result = refineWithKMeansOklab(data, 4, 4, initial.palette);
+
+    expect(result.palette.length).toBe(initial.palette.length);
+    expect(result.indexedData.length).toBe(16);
+    expect(result.remappedData.length).toBe(64);
+  });
+
+  it('preserves transparent pixels', () => {
+    const pixels: Color[] = [
+      [0, 0, 0, 0], // transparent
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+    const data = makeImageData(pixels);
+    const initialPalette: Color[] = [
+      [255, 0, 0, 255],
+      [0, 128, 128, 255],
+    ];
+
+    const result = refineWithKMeansOklab(data, 2, 2, initialPalette);
+
+    expect(result.remappedData[0]).toBe(0);
+    expect(result.remappedData[1]).toBe(0);
+    expect(result.remappedData[2]).toBe(0);
+    expect(result.remappedData[3]).toBe(0);
+  });
+
+  it('with an already-perfect palette, refinement should not change much', () => {
+    const pixels: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 0, 0, 255],
+    ];
+    const data = makeImageData(pixels);
+    const perfectPalette: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+
+    const result = refineWithKMeansOklab(data, 2, 2, perfectPalette);
+
+    expect(result.palette.length).toBe(3);
+    for (let c = 0; c < 3; c++) {
+      for (let ch = 0; ch < 3; ch++) {
+        expect(Math.abs(result.palette[c][ch] - perfectPalette[c][ch])).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('handles empty palette gracefully', () => {
+    const pixels: Color[] = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [128, 128, 128, 255],
+    ];
+    const data = makeImageData(pixels);
+
+    const result = refineWithKMeansOklab(data, 2, 2, []);
+
+    expect(result.palette.length).toBe(0);
+    expect(result.indexedData.length).toBe(4);
+    expect(result.remappedData.length).toBe(16);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // quantize-dispatch.ts
 // ---------------------------------------------------------------------------
 
@@ -630,6 +794,7 @@ describe('quantize dispatcher', () => {
     'weighted-octree',
     'median-cut',
     'octree-refine',
+    'oklab-refine',
   ];
 
   for (const method of methods) {

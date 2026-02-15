@@ -1,5 +1,5 @@
 import type { Color } from '../../types';
-import { rgbToLab, deltaE } from './distance';
+import { rgbToLab, deltaE, rgbToOklab, oklabToRgb, oklabDistance } from './distance';
 
 export interface QuantizeResult {
   palette: Color[];
@@ -174,6 +174,167 @@ export function refineWithKMeans(
 
     for (let c = 0; c < k; c++) {
       const dist = deltaE([pL, pA, pB], paletteLabs[c]);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = c;
+      }
+    }
+
+    indexedData[p] = bestIdx;
+    remappedData[i] = palette[bestIdx][0];
+    remappedData[i + 1] = palette[bestIdx][1];
+    remappedData[i + 2] = palette[bestIdx][2];
+    remappedData[i + 3] = 255;
+  }
+
+  return { palette, indexedData, remappedData };
+}
+
+/**
+ * Refine a palette using k-means clustering in OKLab space.
+ * Same interface as refineWithKMeans but uses OKLab for better perceptual
+ * uniformity (no blue→purple shift, simpler math than CIELAB).
+ *
+ * Centroids are averaged in OKLab space and converted back to RGB,
+ * producing more perceptually faithful palette colors.
+ */
+export function refineWithKMeansOklab(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  initialPalette: Color[],
+  maxIterations: number = 3,
+): QuantizeResult {
+  const pixelCount = width * height;
+  const k = initialPalette.length;
+
+  if (k === 0) {
+    return {
+      palette: [],
+      indexedData: new Uint8Array(pixelCount),
+      remappedData: new Uint8ClampedArray(data.length),
+    };
+  }
+
+  // --- Pre-compute OKLab values for all opaque pixels ---
+  const pixelLabs = new Float64Array(pixelCount * 3);
+  const opaque = new Uint8Array(pixelCount);
+
+  for (let p = 0; p < pixelCount; p++) {
+    const i = p * 4;
+    if (data[i + 3] === 0) continue;
+    opaque[p] = 1;
+    const lab = rgbToOklab(data[i], data[i + 1], data[i + 2]);
+    pixelLabs[p * 3] = lab[0];
+    pixelLabs[p * 3 + 1] = lab[1];
+    pixelLabs[p * 3 + 2] = lab[2];
+  }
+
+  // --- Working copy of the palette (RGB) and its OKLab representation ---
+  const palette: Color[] = initialPalette.map(
+    (c) => [c[0], c[1], c[2], c[3]] as Color,
+  );
+  const paletteLabs: [number, number, number][] = palette.map((c) =>
+    rgbToOklab(c[0], c[1], c[2]),
+  );
+
+  const assignments = new Uint8Array(pixelCount);
+
+  // --- K-means loop ---
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // ---- Assign step: nearest palette entry by OKLab distance ----
+    for (let p = 0; p < pixelCount; p++) {
+      if (!opaque[p]) continue;
+
+      const pL = pixelLabs[p * 3];
+      const pA = pixelLabs[p * 3 + 1];
+      const pB = pixelLabs[p * 3 + 2];
+
+      let bestIdx = 0;
+      let bestDist = Infinity;
+
+      for (let c = 0; c < k; c++) {
+        const dist = oklabDistance([pL, pA, pB], paletteLabs[c]);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = c;
+        }
+      }
+
+      assignments[p] = bestIdx;
+    }
+
+    // ---- Update step: compute centroids in OKLab space ----
+    const lSums = new Float64Array(k);
+    const aSums = new Float64Array(k);
+    const bSums = new Float64Array(k);
+    const counts = new Uint32Array(k);
+
+    for (let p = 0; p < pixelCount; p++) {
+      if (!opaque[p]) continue;
+      const cluster = assignments[p];
+      lSums[cluster] += pixelLabs[p * 3];
+      aSums[cluster] += pixelLabs[p * 3 + 1];
+      bSums[cluster] += pixelLabs[p * 3 + 2];
+      counts[cluster]++;
+    }
+
+    let converged = true;
+
+    for (let c = 0; c < k; c++) {
+      if (counts[c] === 0) continue;
+
+      const avgL = lSums[c] / counts[c];
+      const avgA = aSums[c] / counts[c];
+      const avgB = bSums[c] / counts[c];
+
+      // Convert centroid back to RGB
+      const [newR, newG, newB] = oklabToRgb(avgL, avgA, avgB);
+
+      if (
+        Math.abs(newR - palette[c][0]) > 1 ||
+        Math.abs(newG - palette[c][1]) > 1 ||
+        Math.abs(newB - palette[c][2]) > 1
+      ) {
+        converged = false;
+      }
+
+      palette[c][0] = newR;
+      palette[c][1] = newG;
+      palette[c][2] = newB;
+      palette[c][3] = 255;
+
+      paletteLabs[c] = rgbToOklab(newR, newG, newB);
+    }
+
+    if (converged) break;
+  }
+
+  // --- Final assignment pass ---
+  const indexedData = new Uint8Array(pixelCount);
+  const remappedData = new Uint8ClampedArray(data.length);
+
+  for (let p = 0; p < pixelCount; p++) {
+    const i = p * 4;
+
+    if (!opaque[p]) {
+      indexedData[p] = 0;
+      remappedData[i] = 0;
+      remappedData[i + 1] = 0;
+      remappedData[i + 2] = 0;
+      remappedData[i + 3] = 0;
+      continue;
+    }
+
+    const pL = pixelLabs[p * 3];
+    const pA = pixelLabs[p * 3 + 1];
+    const pB = pixelLabs[p * 3 + 2];
+
+    let bestIdx = 0;
+    let bestDist = Infinity;
+
+    for (let c = 0; c < k; c++) {
+      const dist = oklabDistance([pL, pA, pB], paletteLabs[c]);
       if (dist < bestDist) {
         bestDist = dist;
         bestIdx = c;

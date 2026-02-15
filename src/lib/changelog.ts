@@ -8,7 +8,9 @@ export const changelog: ChangelogEntry[] = [
   {
     version: 'unreleased',
     date: '',
-    items: [],
+    items: [
+      'OKLab + Refine quantization method — k-means refinement in OKLab perceptual color space for better palette quality',
+    ],
   },
   {
     version: '0.3.0',
