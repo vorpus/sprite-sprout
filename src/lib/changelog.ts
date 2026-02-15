@@ -8,7 +8,17 @@ export const changelog: ChangelogEntry[] = [
   {
     version: 'unreleased',
     date: '',
-    items: [],
+    items: [
+      'Material Symbols icons for toolbar (pencil, eraser, fill, picker)',
+      'Instant tooltips with tool name and keyboard shortcut',
+      'Clear (bomb) button to reset editor and load a new image',
+      'Three demo images: Fishing Cat, Salaryman, Sprite Sheet',
+      'Help button moved to toolbar (bottom-aligned)',
+      'Grid and color sliders start at "Original" — no confusing pre-filled values',
+      'Color slider sentinel (65 = Original) locks to 1–64 after first reduction',
+      'Before/after defaults to split view',
+      'Release script: npm run release minor|major',
+    ],
   },
   {
     version: '0.2.0',
